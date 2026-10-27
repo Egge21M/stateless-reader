@@ -98,10 +98,10 @@ Run these from the repository root:
 ```sh
 bun run dev        # Start the reader in watch mode
 bun run dev:frontend # Start the frontend Vite development server
-bun run dev:backend  # Start the backend at http://127.0.0.1:3000
-bun run start:backend # Start the backend without watch mode
+bun run dev:backend  # Start the backend at http://127.0.0.1:3000 (migrate first)
+bun run start:backend # Start the backend without watch mode (migrate first)
 bun run db:generate # Generate SQL migrations from the backend schema
-bun run db:migrate  # Apply backend database migrations
+bun run db:migrate  # Explicitly apply application migrations before backend startup
 bun run start      # Run the reader once
 bun run build      # Build applications into their respective dist directories
 bun run lint       # Lint workspaces that provide a lint script
@@ -110,6 +110,13 @@ bun run test       # Run HTTP, crypto-vector, and real-Coco tests
 bun run test:browser # Run the real frontend/publisher purchase checks
 bun run test:browser:production # Run those checks against the production build
 ```
+
+With the backend environment configured, run `bun run db:migrate` before the
+first publisher start and after installing new application migrations. Starting
+the server never applies application migrations. Coco initializes its own
+separate wallet database automatically. Compiled/container deployments include
+`apps/backend/dist/migrate.js`; see the [operator runbook](docs/demo/live-wallet.md)
+for explicit migration on retained storage before starting the server.
 
 Commit `bun.lock` when dependencies change. For reproducible installs, use
 `bun install --frozen-lockfile`.

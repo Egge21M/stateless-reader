@@ -1,0 +1,27 @@
+# Maintenance configuration: same app, region, process group and retained volume
+# as fly.toml. No listener and no automatic migration. See docs/demo/live-wallet.md.
+app = "REPLACE_WITH_AUTHORIZED_APP"
+primary_region = "fra"
+kill_signal = "SIGTERM"
+kill_timeout = "300s"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  DATABASE_PATH = "/data/application.sqlite"
+
+[processes]
+  app = "sleep infinity"
+
+[[mounts]]
+  source = "publisher_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+# Exactly one Machine, --ha=false. No release_command and no HTTP service.
+# Run the compiled migration via SSH on this Machine with /data mounted;
+# only after success switch back to the normal publisher configuration.

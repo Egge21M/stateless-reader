@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { createServer } from "vite"
 import { startPublisher } from "../../backend/src/app"
+import { migrateApplication } from "../../backend/src/db/migrate"
 
 const directory = await mkdtemp(join(tmpdir(), "catalogue-browser-"))
 const production = process.env.PUBLISHER_FRONTEND_MODE === 'production'
@@ -10,13 +11,15 @@ const { startFakeMint } = await import('../../backend/tests/fake-mint')
 const { openCocoSettlement } = await import('../../backend/src/coco')
 const mint = startFakeMint()
 const settlement = await openCocoSettlement({ databasePath: join(directory, 'coco.sqlite'), mint: mint.url, seed: new Uint8Array(64).fill(42) })
+const databasePath = join(directory, "application.sqlite")
+migrateApplication(databasePath)
 const publisher = startPublisher({
   mint: mint.url,
   settlement,
   publicOrigin: 'http://127.0.0.1:4173',
   port: production ? 4173 : 0,
   frontendDirectory: production ? new URL('../dist', import.meta.url).pathname : undefined,
-  databasePath: join(directory, "application.sqlite"),
+  databasePath,
 })
 const frontend = production ? undefined : await createServer({
   root: new URL("../", import.meta.url).pathname,

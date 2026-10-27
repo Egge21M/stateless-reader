@@ -110,6 +110,13 @@ CORS/JSON and graceful reopening. It did not submit valid payment proofs and did
 not demonstrate real received funds. The deterministic Coco tests establish
 normal fund retention using only a controlled local mint.
 
+This is historical evidence for the preparation build identified above. The
+review fix for #1/#2 separates application migration from startup: current builds
+ship `dist/migrate.js`, which must run explicitly against retained application
+state before serving it. Follow the updated [runbook](../../demo/live-wallet.md),
+not the original build's implicit migration behavior. Coco's separate automatic
+wallet migrations and the pending live checks below are unchanged.
+
 No live-wallet-specific interoperability fix is claimed: the changes above are
 operator-path support, and the existing HTTP payment contract remains intact.
 
