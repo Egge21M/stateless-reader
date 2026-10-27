@@ -23,6 +23,10 @@ before `bun run dev:backend` or `bun run start:backend` from the repository root
   Required behind a TLS proxy; HTTP origins are accepted only for loopback
   development. When omitted, targets use the listener origin, never request Host
   or forwarding headers.
+- `FRONTEND_DIST_PATH`: optional absolute path to `apps/frontend/dist` after
+  `bun run build`. Serves the built reader at `/` and its assets on the API
+  listener. Unknown paths remain JSON 404; source/state files are not served.
+  The build is loaded at startup, so deploy frontend changes with a restart.
 
 Relative file paths resolve against the process working directory (the backend
 workspace for workspace scripts); parent directories must already exist. Use
@@ -40,7 +44,9 @@ implemented. Recheck the mint's current metadata before a live demonstration.
 
 Pinned packages are `@cashu/coco-core@2.0.0`, `@cashu/coco-sqlite-bun@2.0.0`, and
 `@cashu/cashu-ts@5.0.0-rc.4`. Coco declares a TypeScript 5 peer while this repository
-uses TypeScript 7; installation warns, but the workspace typecheck and build pass.
+uses TypeScript 7 (the frontend uses TypeScript 6). The frozen install in #7 did
+not emit a peer warning, but the declared mismatch remains. Workspace typecheck
+and build pass with `skipLibCheck`; this is not a claim of upstream TS 7 support.
 
 ## HTTP contract
 
@@ -141,3 +147,9 @@ edition and reads it repeatedly with the existing grant ten simulated years late
 without a settlement adapter. See [reader recovery and its limits](../../README.md#recovering-purchases).
 Live external-wallet/Minibits interoperability and HTTPS deployment remain #7;
 automated success does not establish that live demonstration.
+
+The [live-wallet runbook](../../docs/demo/live-wallet.md) covers the compiled
+single-listener deployment, stable seed provisioning, Docker/Fly and temporary
+HTTPS options, wallet pin, live steps, backups and expected failures. Run
+`bun run test:browser:production` from the root to exercise the browser suite
+against built assets on the publisher, without a Vite development server.

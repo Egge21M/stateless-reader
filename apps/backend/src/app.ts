@@ -7,6 +7,7 @@ import { articles, publicCatalogue, type PublisherArticle } from "./articles";
 import { accessGrants } from "./db/schema";
 import type { Settlement } from "./settlement";
 import { PaymentError, paymentHeaders, paymentToken, validPublicKey } from "./payment";
+import { frontendFiles } from "./frontend";
 
 export interface PublisherOptions {
   databasePath: string;
@@ -19,9 +20,12 @@ export interface PublisherOptions {
   mint?: string;
   /** Publisher-owned fixture edition. Preserve IDs for corrections; never reuse them. */
   articles?: readonly PublisherArticle[];
+  /** Optional Vite production build; only index.html and public assets are served. */
+  frontendDirectory?: string;
 }
 
 export function startPublisher(options: PublisherOptions) {
+  const frontend = options.frontendDirectory ? frontendFiles(options.frontendDirectory) : undefined;
   let publicOrigin: string | undefined;
   if (options.publicOrigin) {
     const origin = new URL(options.publicOrigin);
@@ -131,7 +135,11 @@ export function startPublisher(options: PublisherOptions) {
           },
         },
       },
-      fetch() {
+      fetch(request) {
+        if (request.method === "GET" || request.method === "HEAD") {
+          const file = frontend?.get(new URL(request.url).pathname);
+          if (file) return file(request.method === "HEAD");
+        }
         return Response.json({ error: "Not found" }, { status: 404 });
       },
       error() {

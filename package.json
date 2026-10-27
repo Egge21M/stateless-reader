@@ -19,7 +19,8 @@
     "lint": "bun run --workspaces --if-present lint",
     "typecheck": "bun run --workspaces typecheck",
     "test": "bun test --pass-with-no-tests",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "test:browser:production": "bun run --filter @stateless-reader/frontend build && PUBLISHER_FRONTEND_MODE=production playwright test"
   },
   "devDependencies": {
     "@cashu/cashu-ts": "5.0.0-rc.4",

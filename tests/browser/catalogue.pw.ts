@@ -96,7 +96,7 @@ test("the frontend cannot serve publisher-only fixture source", async ({ request
   const source = new URL("../../apps/backend/src/articles.ts", import.meta.url).pathname;
   for (const suffix of ["", "?raw"]) {
     const response = await request.get(`/@fs${source}${suffix}`);
-    expect(response.status()).toBe(403);
+    expect(response.status()).toBe(process.env.PUBLISHER_FRONTEND_MODE === 'production' ? 404 : 403);
     expect(await response.text()).not.toContain("A quiet website begins with a stopping point.");
   }
 });

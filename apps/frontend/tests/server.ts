@@ -5,6 +5,7 @@ import { createServer } from "vite"
 import { startPublisher } from "../../backend/src/app"
 
 const directory = await mkdtemp(join(tmpdir(), "catalogue-browser-"))
+const production = process.env.PUBLISHER_FRONTEND_MODE === 'production'
 const { startFakeMint } = await import('../../backend/tests/fake-mint')
 const { openCocoSettlement } = await import('../../backend/src/coco')
 const mint = startFakeMint()
@@ -13,10 +14,11 @@ const publisher = startPublisher({
   mint: mint.url,
   settlement,
   publicOrigin: 'http://127.0.0.1:4173',
-  port: 0,
+  port: production ? 4173 : 0,
+  frontendDirectory: production ? new URL('../dist', import.meta.url).pathname : undefined,
   databasePath: join(directory, "application.sqlite"),
 })
-const frontend = await createServer({
+const frontend = production ? undefined : await createServer({
   root: new URL("../", import.meta.url).pathname,
   server: {
     host: "127.0.0.1",
@@ -25,13 +27,13 @@ const frontend = await createServer({
     proxy: { "/article": publisher.url.origin, "/payment": publisher.url.origin },
   },
 })
-await frontend.listen()
+await frontend?.listen()
 
 let stopping = false
 async function stop() {
   if (stopping) return
   stopping = true
-  await frontend.close()
+  await frontend?.close()
   await publisher.stop()
   await mint.stop()
   await rm(directory, { recursive: true })
