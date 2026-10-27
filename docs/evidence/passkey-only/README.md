@@ -30,3 +30,17 @@ No real payment was performed. Physical authenticator, Apple/Google/third-party
 sync and cross-device PRF compatibility remain unverified. Return now depends
 solely on the same credential, RP hostname and provider PRF output; no phrase
 fallback remains. Earlier deployment records describe historical releases.
+
+## Login entry simplification — 19:36 UTC
+
+Source `3df12099243114f5187209e5323d44879f4416a5` renames the primary action to
+**Login with passkey** and presents **First time? Create a reader** as a small
+link-style button only after an unsuccessful attempt. Credential creation
+remains explicit; derivation and cancellation behavior are unchanged.
+
+Deployed image `registry.fly.io/stateless-reader-egge21m@sha256:2ddf9d27d7db5a2ba189f3138b26b6f8cd4abfa728dd486b887511e17c9b7e54`,
+tag `deployment-01M5ZDS31XCS4D6KW9EEAJS90J`, on the same Machine (version 6),
+healthy at 19:36:40 UTC. Typecheck, lint and the nine production passkey browser
+tests passed. [Live checks](login-entry-live-check.json) confirmed the tested
+bundle, native creation and same-key rediscovery after reload, no payment POSTs,
+and empty app credential storage. The mobile fallback link was visually checked.
