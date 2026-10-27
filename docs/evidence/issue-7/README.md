@@ -1,8 +1,12 @@
 # #7 preparation evidence — LIVE demonstration pending
 
 **Deployment update:** the reviewed implementation is now deployed to personal
-Fly. See [deployment and public HTTPS evidence](fly-deployment.md). Live wallet
-payments remain pending. The following is the earlier preparation snapshot.
+Fly. See [deployment and public HTTPS evidence](fly-deployment.md).
+The user subsequently confirmed Macadamia receives HTTP 415 and reported generic
+delivery failures from Cashu.me/CDK. The earlier phrase “it does work” is ambiguous:
+no successful wallet/build, purchase, or restoration has been identified.
+See [Macadamia Content-Type fix and local regression evidence](macadamia-content-type.md).
+Live wallet acceptance remains pending. The following is the earlier preparation snapshot.
 
 Validation date: **2026-10-27 UTC**. This record does **not** complete #7.
 No external wallet payment, deployment, resource provisioning, account creation,
