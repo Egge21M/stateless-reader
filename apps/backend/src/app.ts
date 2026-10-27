@@ -93,6 +93,8 @@ export function startPublisher(options: PublisherOptions) {
             }
             const payment = new PaymentRequest(
               [{ type: PaymentRequestTransportType.POST,
+                // cashu-ts rc.4 emits g:undefined without tags; CDK 0.17.7 needs an array.
+                tags: [],
                 target: `${publicOrigin ?? server.url.origin}/payment/${article.id}/${publicKey}` }],
               undefined, article.offer.amount, article.offer.unit, [article.offer.mint], article.title, true,
             );
