@@ -26,10 +26,16 @@ The catalogue explicitly selects its public fields.
 
 Article identifiers and offers are permanent. Correct a body under its existing
 identifier; create a new identifier for unrelated content. Do not recycle IDs.
-`GET /article/:articleId` currently returns JSON 401 for a known article and 404
-for an unknown article. All full content is denied until the subsequent signing
-and access-grant tickets implement authorization. There is no public fixture
-endpoint or payment behavior in this catalogue slice.
+`GET /article/:articleId` returns 401 without valid v1 authorization, 404 for an
+unknown article, and 402 for an authenticated unpaid article. The 402 contains an
+ordinary NUT-18 `creqA` request with one POST transport bound to the article and
+public key. Full content remains denied: settlement and grants belong to #5.
+No payment POST handler or unpaid checkout/session storage exists yet.
+
+The frozen [reader v1 protocol](../../docs/protocol/reader-v1.md) specifies exact
+recovery, key derivation, signed bytes, header encoding, and the inclusive
+60-second clock tolerance. Replays within that tolerance are intentionally
+accepted. Article responses use `Cache-Control: no-store`.
 
 ## Configuration
 
@@ -38,6 +44,10 @@ automatically when running the workspace scripts.
 
 - `HOST`: bind address, defaults to `127.0.0.1`.
 - `PORT`: HTTP port, defaults to `3000`.
+- `PUBLIC_ORIGIN`: trusted external HTTPS origin for payment targets, such as
+  `https://publisher.example`. Set this behind a TLS reverse proxy. HTTP origins
+  are accepted only for loopback development. If omitted, targets use the bound
+  listener origin; caller-controlled Host/forwarding headers are never used.
 - `DATABASE_PATH`: SQLite filename, defaults to `./data.sqlite` in this workspace.
   Relative paths resolve against the working directory; the parent directory must
   exist. Use an absolute path when running outside the workspace.
@@ -62,7 +72,7 @@ Use `openDatabase(":memory:")` for isolated in-memory databases.
 
 Import `startPublisher` from `src/app.ts` (also exported from `src/index.ts`).
 Neither import starts a listener or installs signal handlers. The CLI entry point
-alone reads `HOST`, `PORT`, and `DATABASE_PATH` and handles SIGINT/SIGTERM.
+alone reads `HOST`, `PORT`, `PUBLIC_ORIGIN`, and `DATABASE_PATH` and handles SIGINT/SIGTERM.
 
 ```ts
 import { startPublisher } from "./src/app";

@@ -15,7 +15,7 @@ const frontend = await createServer({
     host: "127.0.0.1",
     port: 4173,
     strictPort: true,
-    proxy: { "/articles": publisher.url.origin },
+    proxy: { "/article": publisher.url.origin },
   },
 })
 await frontend.listen()

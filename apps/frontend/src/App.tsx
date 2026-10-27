@@ -1,3 +1,6 @@
+import { PaymentPanel } from "@/components/payment-panel"
+import { useReader } from "@/lib/use-reader"
+import { ReaderControls } from "@/components/reader-controls"
 import { useEffect, useRef, useState } from "react"
 import {
   ArrowUpRightIcon,
@@ -57,6 +60,7 @@ function isArticleMetadata(value: unknown): value is ArticleMetadata {
 }
 
 export function App() {
+  const reader = useReader()
   const [articles, setArticles] = useState<ArticleMetadata[]>([])
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading")
   const [attempt, setAttempt] = useState(0)
@@ -129,6 +133,8 @@ export function App() {
           </p>
         </div>
 
+        <ReaderControls reader={reader} />
+
         {selectedArticle && (
           <section
             aria-label="Selected article"
@@ -150,13 +156,22 @@ export function App() {
             <p className="font-medium">
               {selectedArticle.offer.amount} {selectedArticle.offer.unit}
             </p>
-            <Alert role="status">
-              <LockKeyholeIcon aria-hidden="true" />
-              <AlertTitle>Full article locked</AlertTitle>
-              <AlertDescription>
-                This is a public preview. Purchasing is not available yet.
-              </AlertDescription>
-            </Alert>
+            {reader.identity ? (
+              <PaymentPanel
+                key={`${reader.revision}:${selectedArticle.id}`}
+                identity={reader.identity}
+                article={selectedArticle}
+              />
+            ) : (
+              <Alert role="status">
+                <LockKeyholeIcon aria-hidden="true" />
+                <AlertTitle>Full article locked</AlertTitle>
+                <AlertDescription>
+                  Create or restore a reader phrase to check access. Purchasing
+                  is not available yet.
+                </AlertDescription>
+              </Alert>
+            )}
             <Button
               variant="outline"
               className="self-start"

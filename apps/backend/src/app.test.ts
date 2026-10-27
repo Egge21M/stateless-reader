@@ -1,3 +1,4 @@
+import type { PaymentRequiredResponse } from "@stateless-reader/core";
 import { afterEach, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -208,4 +209,85 @@ test.each(["SIGINT", "SIGTERM"] as const)("CLI startup serves HTTP and shuts dow
     if (child.exitCode === null) child.kill("SIGKILL");
     await child.exited;
   }
+});
+
+test("an unpaid signed article returns an ordinary NUT-18 bound to its fixed offer and reader key", async () => {
+  const { signArticleRequest, restoreReader } = await import("@stateless-reader/core");
+  const { decodePaymentRequest, PaymentRequestTransportType } = await import("@cashu/cashu-ts");
+  const publisher = startPublisher({ port: 0, databasePath: await temporaryDatabase() });
+  publishers.push(publisher);
+  const { seed } = await restoreReader("abandon ".repeat(11) + "about");
+  const path = "/article/the-quiet-web";
+  const authorization = signArticleRequest(seed, {
+    articleId: "the-quiet-web", method: "GET", path, timestamp: Math.floor(Date.now() / 1000),
+  });
+  for (let replay = 0; replay < 2; replay++) {
+    const response = await fetch(new URL(path, publisher.url), { headers: { authorization } });
+    expect(response.status).toBe(402);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    const body = await response.json() as PaymentRequiredResponse;
+    expect(Object.keys(body).sort()).toEqual(["articleId", "offer", "paymentRequest", "protocolVersion", "publicKey"]);
+    expect(body.articleId).toBe("the-quiet-web");
+    expect(body.protocolVersion).toBe(1);
+    expect(body.offer).toEqual({ amount: 21, mint: "https://mint.minibits.cash/Bitcoin", unit: "sat" });
+    expect(body.publicKey).toBe("360fc8d6daaa8ef054dbd8a3721cd3237f863dc9b9cc87f6df596abdfdde8dfb");
+    expect(body.paymentRequest).toMatch(/^creqA[A-Za-z0-9_=-]+$/);
+    const payment = decodePaymentRequest(body.paymentRequest);
+    expect(payment.amount?.toNumber()).toBe(21);
+    expect(payment.unit).toBe("sat");
+    expect(payment.mints).toEqual(["https://mint.minibits.cash/Bitcoin"]);
+    expect(payment.singleUse).toBe(true);
+    expect(payment.transport).toEqual([{ type: PaymentRequestTransportType.POST,
+      target: `${publisher.url.origin}/payment/the-quiet-web/${body.publicKey}` }]);
+  }
+});
+
+test("HTTP rejects altered, malformed, stale and wrong-key authorization without disclosure", async () => {
+  const { signArticleRequest, restoreReader } = await import("@stateless-reader/core");
+  const publisher = startPublisher({ port: 0, databasePath: await temporaryDatabase() });
+  publishers.push(publisher);
+  const { seed } = await restoreReader("abandon ".repeat(11) + "about");
+  const now = Math.floor(Date.now() / 1000);
+  const binding = { articleId: "the-quiet-web", method: "GET", path: "/article/the-quiet-web", timestamp: now };
+  const valid = signArticleRequest(seed, binding);
+  const cases = [
+    { path: binding.path, authorization: "garbage" },
+    { path: binding.path, authorization: valid.slice(0, -1) + (valid.endsWith("f") ? "e" : "f") },
+    { path: binding.path, authorization: valid.replace("360fc8d6daaa8ef054dbd8a3721cd3237f863dc9b9cc87f6df596abdfdde8dfb", "0d174f330614021cad5085b2325d6fabb9a0d0fe18ffe5c6663fc0ade32efbc3") },
+    { path: binding.path, authorization: signArticleRequest(seed, { ...binding, timestamp: now - 65 }) },
+    { path: binding.path, authorization: signArticleRequest(seed, { ...binding, timestamp: now + 65 }) },
+    { path: binding.path, authorization: signArticleRequest(seed, { ...binding, method: "POST" }) },
+    { path: binding.path, authorization: signArticleRequest(seed, { ...binding, articleId: "a-library-in-your-pocket" }) },
+    { path: binding.path + "?changed=1", authorization: valid },
+    { path: "/article/a-library-in-your-pocket", authorization: valid },
+  ];
+  for (const { path, authorization } of cases) {
+    const response = await fetch(new URL(path, publisher.url), { headers: { authorization } });
+    expect(response.status).toBe(401);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toEqual({ error: "Article authorization required" });
+  }
+  const unknown = await fetch(new URL("/article/missing", publisher.url), { headers: { authorization: valid } });
+  expect(unknown.status).toBe(404);
+  expect(await unknown.json()).toEqual({ error: "Not found" });
+  const wrongMethod = await fetch(new URL(binding.path, publisher.url), { method: "POST", headers: { authorization: valid } });
+  expect(wrongMethod.status).toBe(404);
+  expect(await wrongMethod.json()).toEqual({ error: "Not found" });
+});
+
+test("NUT-18 uses the configured HTTPS origin rather than caller-controlled hosts", async () => {
+  const { signArticleRequest, restoreReader } = await import("@stateless-reader/core");
+  const { decodePaymentRequest } = await import("@cashu/cashu-ts");
+  const publisher = startPublisher({ port: 0, databasePath: await temporaryDatabase(), publicOrigin: "https://publisher.example" });
+  publishers.push(publisher);
+  const { seed } = await restoreReader("abandon ".repeat(11) + "about");
+  const path = "/article/the-quiet-web";
+  const authorization = signArticleRequest(seed, { articleId: "the-quiet-web", path, method: "GET", timestamp: Math.floor(Date.now() / 1000) });
+  const response = await fetch(new URL(path, publisher.url), {
+    headers: { authorization, Host: "attacker.example", "X-Forwarded-Host": "attacker.example", "X-Forwarded-Proto": "http" },
+  });
+  expect(response.status).toBe(402);
+  const body = await response.json() as PaymentRequiredResponse;
+  expect(decodePaymentRequest(body.paymentRequest).transport?.[0]?.target)
+    .toBe(`https://publisher.example/payment/the-quiet-web/${body.publicKey}`);
 });

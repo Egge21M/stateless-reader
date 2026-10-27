@@ -9,6 +9,7 @@ if (import.meta.main) {
     hostname: process.env.HOST ?? "127.0.0.1",
     port: Number(process.env.PORT ?? 3000),
     databasePath,
+    publicOrigin: process.env.PUBLIC_ORIGIN,
   });
 
   console.log(`Backend listening on ${publisher.url}`);
