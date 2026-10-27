@@ -42,6 +42,49 @@ server; server startup does not modify the application schema.
 `src/db/index.ts` owns the database connection and exports `openDatabase`.
 Use `openDatabase(":memory:")` for isolated in-memory databases.
 
+## Isolated publisher lifecycle
+
+Import `startPublisher` from `src/app.ts` (also exported from `src/index.ts`).
+Neither import starts a listener or installs signal handlers. The CLI entry point
+alone reads `HOST`, `PORT`, and `DATABASE_PATH` and handles SIGINT/SIGTERM.
+
+```ts
+import { startPublisher } from "./src/app";
+
+const publisher = startPublisher({
+  databasePath: "/tmp/example/application.sqlite",
+  hostname: "127.0.0.1",
+  port: 0,
+});
+
+try {
+  const response = await fetch(new URL("/health", publisher.url));
+  console.log(await response.json());
+} finally {
+  await publisher.stop();
+}
+```
+
+The database path is required; its parent directory must already exist. Host and
+port default to `127.0.0.1:3000`; port `0` selects an available port reported in
+`publisher.url`. Each instance owns its listener and SQLite connection. Awaiting
+`stop()` closes connections (including keep-alive connections) before closing
+SQLite, and repeated or concurrent calls are safe. It terminates active HTTP
+connections; draining future asynchronous payment work will need to be handled
+when that work is introduced. Startup failure closes an opened database.
+Migrations remain an explicit step before startup, using the same database path.
+
+`PublisherOptions` is the application composition boundary for future payment
+tests: add the controlled settlement dependency there when the payment behavior
+defines its contract. No wallet interface or unused settlement hook is introduced
+in this lifecycle slice. Routes, authentication, offer validation, and grant
+persistence belong inside the publisher, with only external settlement substituted.
+
+Run `bun test apps/backend/src/app.test.ts` from the root for the HTTP lifecycle
+regression suite. It uses temporary SQLite files and real localhost listeners,
+including CLI subprocesses for import and signal behavior; no mint or funds are
+needed.
+
 ## Build and checks
 
 Run `bun run build` and `bun run typecheck` from the repository root. The backend
