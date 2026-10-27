@@ -45,6 +45,49 @@ QR/copy panel, and cleared it on lock. No page errors occurred. No payment was
 submitted. T3 preview could not start its sandbox as root, so the permitted
 Playwright fallback was used without traces or secret-bearing screenshots.
 
+## Editorial and wallet compatibility release — 14:39 UTC
+
+Deployed publisher commit `43542274c17a8a53ee05f60a7567f7e1e0531247` using
+`registry.fly.io/stateless-reader-egge21m@sha256:14ab24147940dab07615c74208045217e77e6d8843ed9a3ad0551d9912489b85`.
+The remote Docker build succeeded. The same Machine and encrypted volume remain
+attached; no schema change or seed replacement was needed. Fly health is passing.
+
+The editorial layout now contains reader creation, recovery, backup and locking
+inside a profile dialog. Payment QR/copy controls appear in a separate accessible
+dialog; closing it cancels polling. Successful access returns focus to the article.
+Desktop, mobile, dark-mode and payment screenshots were visually reviewed, along
+with a fresh screenshot of the deployed catalogue.
+
+This release also includes the [Macadamia header compatibility fix](macadamia-content-type.md)
+and [verified CDK compatibility fixes](cdk-interop.md). JSON payment bodies may omit
+Content-Type or use the evidenced Foundation default. NUT-18 transport tags are
+an empty array, and optional payment metadata permits null. Validation and
+settlement requirements remain intact. CDK parser/client reproduction passes;
+the controlled client reaches disabled-settlement 503, which is not a payment.
+Cashu.me's reported delivery failure remains unreproduced.
+
+Integrated validation passed **54 Bun tests (951 assertions), 29 development and
+29 production browser scenarios**, lint, typecheck, build and whitespace checks.
+The original 23 browser scenarios remain covered.
+
+Fresh public HTTPS checks at **14:39 UTC** passed without funds or Cashu proofs:
+
+- Health/catalogue 200, six articles without premium bodies, unsigned access 401,
+  and signed unpaid access 402.
+- Decoded payment requests bind the HTTPS origin and include empty transport tags.
+- Payment preflight 204; empty JSON bodies return 400 with CORS for JSON, absent,
+  and Foundation-default Content-Type, confirming they reach JSON validation.
+- Backend source, database paths and `.env` return 404.
+- All three Minibits sat keysets still report zero input fees.
+- Chromium `156.0.8078.4` rendered the editorial catalogue, restored a public test
+  identity inside Profile, opened and dismissed the payment dialog, and locked
+  the reader without page errors. No live payment was performed.
+
+The Playwright fallback was used because T3's browser cannot start its sandbox
+as root. No traces or secret-bearing screenshots were captured. Existing saved
+payment requests do not gain the CDK encoding correction; generate a fresh request
+from the updated site when retesting.
+
 ## Still required for #7
 
 Record the operator's actual wallet/build, both real purchases and polling-to-read
