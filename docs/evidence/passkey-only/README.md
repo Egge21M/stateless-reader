@@ -44,3 +44,18 @@ healthy at 19:36:40 UTC. Typecheck, lint and the nine production passkey browser
 tests passed. [Live checks](login-entry-live-check.json) confirmed the tested
 bundle, native creation and same-key rediscovery after reload, no payment POSTs,
 and empty app credential storage. The mobile fallback link was visually checked.
+
+## First-visit creation — 19:40 UTC
+
+Source `f54a779427357c3e5f1275ad4e6182cdb492b3b5` removes the failed-login
+prerequisite. The small **First time? Create a reader** link is visible directly
+below **Login with passkey** on first visit. Both actions are disabled during a
+pending ceremony; creation remains explicit and does not follow cancellation.
+
+Deployed image `registry.fly.io/stateless-reader-egge21m@sha256:5004444203f3eff3b0b3eff9ad7ceba0cea1b88ded156fca74991ed7d8dfefd3`,
+tag `deployment-01M5ZE0CZ8FCBYFNQ762Y5SHQE`, on the same Machine (version 7),
+healthy at 19:40:14 UTC. Typecheck, lint and all nine production passkey tests
+passed. The native WebAuthn test now creates directly on first visit with no
+mocked or failed discovery request. [Live checks](direct-create-live-check.json)
+confirmed direct native creation, same-key recovery after reload, mobile layout,
+no app credential storage and no payment POSTs.
