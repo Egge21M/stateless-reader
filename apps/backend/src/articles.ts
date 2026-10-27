@@ -2,6 +2,14 @@
 // a body, but an ID must never be reassigned to an unrelated article.
 const mint = "https://mint.minibits.cash/Bitcoin";
 
+export interface PublisherArticle {
+  id: string;
+  title: string;
+  preview: string;
+  offer: { amount: number; unit: string; mint: string };
+  body: string;
+}
+
 export const articles = [
   {
     id: "the-quiet-web",
@@ -48,9 +56,9 @@ export const articles = [
 ] as const;
 
 // Explicit projection prevents future private fields from entering the catalogue.
-export function publicCatalogue(mintOverride?: string) {
-  return articles.map(({ id, title, preview, offer }) => ({
+export function publicCatalogue(catalogue: readonly PublisherArticle[]) {
+  return catalogue.map(({ id, title, preview, offer }) => ({
     id, title, preview,
-    offer: { amount: offer.amount, unit: offer.unit, mint: mintOverride ?? offer.mint },
+    offer: { amount: offer.amount, unit: offer.unit, mint: offer.mint },
   }));
 }

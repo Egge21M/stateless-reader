@@ -1,5 +1,6 @@
-import { expect, test, type Page, type APIRequestContext } from '@playwright/test';
+import { expect, test, type Page, type APIRequestContext, type BrowserContext } from '@playwright/test';
 import { decodePaymentRequest } from '@cashu/cashu-ts';
+import { restoreReader, deriveArticleKey } from '../../packages/core/src/index';
 
 test.use({ trace: 'off' });
 async function pay(page: Page, request: APIRequestContext) {
@@ -10,37 +11,143 @@ async function pay(page: Page, request: APIRequestContext) {
   expect(response.status()).toBe(200);
   return payment;
 }
-test('a purchase automatically opens content, stops polling, and restores in a fresh browser', async ({ page, request, browser }) => {
+// Observe browser boundaries throughout the journey, including before restoration.
+function observeReader(context: BrowserContext) {
+  const traffic: string[] = [];
+  const logs: string[] = [];
+  const articles: { path: string; key: string | undefined }[] = [];
+  const payments: string[] = [];
+  context.on('request', request => {
+    traffic.push(request.url(), JSON.stringify(request.headers()), request.postData() ?? '');
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith('/payment/')) payments.push(path);
+    if (path.startsWith('/article/')) articles.push({ path,
+      key: request.headers()['authorization']?.split(' ')[1]?.split('.')[0] });
+  });
+  context.on('console', message => logs.push(message.text()));
+  return {
+    articles,
+    payments,
+    async assertPrivate(page: Page, secrets: string[]) {
+      const emptyStorage = await page.evaluate(async () =>
+        localStorage.length === 0 && sessionStorage.length === 0 &&
+        (await indexedDB.databases()).length === 0 && (await caches.keys()).length === 0);
+      // Boolean assertions avoid printing a leaked secret in failure output.
+      expect(emptyStorage, 'No persistent reader storage').toBe(true);
+      expect((await context.cookies()).length, 'No reader cookies').toBe(0);
+      expect(secrets.some(secret => traffic.some(entry => entry.includes(secret))), 'No reader secrets in requests').toBe(false);
+      expect(secrets.some(secret => logs.some(entry => entry.includes(secret))), 'No reader secrets in console output').toBe(false);
+    },
+  };
+}
+
+async function secretEncodings(phrase: string) {
+  const { seed } = await restoreReader(phrase);
+  const keys = ['the-quiet-web', 'a-library-in-your-pocket'].map(id => deriveArticleKey(seed, id).privateKey);
+  const encodings = [phrase, encodeURIComponent(phrase), phrase.replaceAll(' ', '+')];
+  for (const bytes of [seed, ...keys]) {
+    encodings.push(Buffer.from(bytes).toString('hex'), Buffer.from(bytes).toString('base64'),
+      JSON.stringify([...bytes]), JSON.stringify(bytes));
+    bytes.fill(0);
+  }
+  return encodings;
+}
+
+test('two independent purchases restore on demand with one phrase and no persistent credentials', async ({ page, context, request, browser }) => {
+  const audit = observeReader(context);
   await page.goto('/');
   await page.getByRole('button', { name: 'Create reader phrase', exact: true }).click();
   const phrase = await page.getByLabel('Your reader recovery phrase', { exact: true }).inputValue();
+  expect(phrase.split(' ')).toHaveLength(12);
   await page.getByRole('button', { name: 'Hide backup' }).click();
-  await page.getByRole('button', { name: 'Select The quiet web', exact: true }).click();
-  await expect(page.getByLabel('Payment request', { exact: true })).toBeVisible();
-  const first = await pay(page, request);
-  await expect(page.getByRole('article')).toContainText('A quiet website begins with a stopping point.');
-  const requests: string[] = [];
-  page.on('request', r => { if (new URL(r.url()).pathname.startsWith('/article/')) requests.push(r.url()); });
+  const secrets = await secretEncodings(phrase);
+  await audit.assertPrivate(page, secrets);
+  const purchases = [
+    { id: 'the-quiet-web', title: 'The quiet web', passage: 'A quiet website begins with a stopping point.' },
+    { id: 'a-library-in-your-pocket', title: 'A library in your pocket', passage: 'The most useful library is not the largest one.' },
+  ];
+  const keys: string[] = [];
+  for (const article of purchases) {
+    const response = page.waitForResponse(r => new URL(r.url()).pathname === `/article/${article.id}`);
+    await page.getByRole('button', { name: `Select ${article.title}`, exact: true }).click();
+    // The second article still requires its own payment after the first is bought.
+    expect((await response).status()).toBe(402);
+    await expect(page.getByLabel('Payment request', { exact: true })).toBeVisible();
+    await expect(page.getByRole('article')).toHaveCount(0);
+    await audit.assertPrivate(page, secrets);
+    const payment = await pay(page, request);
+    keys.push(payment.transport![0]!.target.split('/').at(-1)!);
+    await expect(page.getByRole('article')).toContainText(article.passage);
+    await expect(page.getByLabel('Payment request', { exact: true })).toHaveCount(0);
+    await audit.assertPrivate(page, secrets);
+  }
+  expect(keys[0]).not.toBe(keys[1]);
+  const readCount = audit.articles.length;
   await page.waitForTimeout(1800);
-  expect(requests).toEqual([]);
-  await expect(page.getByLabel('Payment request', { exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Select A library in your pocket', exact: true }).click();
-  await expect(page.getByLabel('Payment request', { exact: true })).toBeVisible();
-  const second = await pay(page, request);
-  expect(second.transport![0]!.target.split('/').at(-1)).not.toBe(first.transport![0]!.target.split('/').at(-1));
-  await expect(page.getByRole('article')).toContainText('The most useful library is not the largest one.');
+  expect(audit.articles).toHaveLength(readCount);
+
   await page.getByRole('button', { name: 'Lock reader', exact: true }).click();
   await expect(page.getByRole('article')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Select The quiet web', exact: true }).click();
+  await expect(page.getByText('Reader locked', { exact: true })).toBeVisible();
+  await page.waitForTimeout(1800);
+  expect(audit.articles).toHaveLength(readCount);
+  await audit.assertPrivate(page, secrets);
+
   const fresh = await browser.newContext();
+  const restoredAudit = observeReader(fresh);
   try {
     const restored = await fresh.newPage();
     await restored.goto('/');
     await restored.getByLabel('Restore reader recovery phrase', { exact: true }).fill(phrase);
     await restored.getByRole('button', { name: 'Restore reader', exact: true }).click();
     await expect(restored.getByText('Reader unlocked', { exact: true })).toBeVisible();
-    await restored.getByRole('button', { name: 'Select The quiet web', exact: true }).click();
-    await expect(restored.getByRole('article')).toContainText('A quiet website begins with a stopping point.');
+    await restored.waitForTimeout(1800);
+    expect(restoredAudit.articles).toEqual([]);
+    await restoredAudit.assertPrivate(restored, secrets);
+    // Repeat visits exercise both grants with the recreated article keys, without any payment POST.
+    for (let visit = 0; visit < 2; visit++) {
+      for (const [index, article] of purchases.entries()) {
+        const before = restoredAudit.articles.length;
+        const response = restored.waitForResponse(r => new URL(r.url()).pathname === `/article/${article.id}`);
+        await restored.getByRole('button', { name: `Select ${article.title}`, exact: true }).click();
+        expect((await response).status()).toBe(200);
+        await expect(restored.getByRole('article')).toContainText(article.passage);
+        await expect(restored.getByLabel('Payment request', { exact: true })).toHaveCount(0);
+        const opened = restoredAudit.articles.slice(before);
+        expect(opened.length).toBeGreaterThan(0);
+        // Development StrictMode can repeat a request; only this article/key may be checked.
+        for (const access of opened) expect(access).toEqual({ path: `/article/${article.id}`, key: keys[index] });
+        await restoredAudit.assertPrivate(restored, secrets);
+      }
+    }
+    expect(restoredAudit.payments).toEqual([]);
+    // Reload a paid, unlocked tab: there must be no hidden credential that can reopen it.
+    await restored.reload();
+    await expect(restored.getByText('Reader locked', { exact: true })).toBeVisible();
+    const beforeReloadSelection = restoredAudit.articles.length;
+    await restored.getByRole('button', { name: 'Select A library in your pocket', exact: true }).click();
+    await restored.waitForTimeout(1800);
+    await expect(restored.getByRole('article')).toHaveCount(0);
     await expect(restored.getByLabel('Payment request', { exact: true })).toHaveCount(0);
+    expect(restoredAudit.articles).toHaveLength(beforeReloadSelection);
+    await restoredAudit.assertPrivate(restored, secrets);
+
+    // An unrelated freshly generated reader inherits neither purchase.
+    await restored.getByRole('button', { name: 'Clear selection', exact: true }).click();
+    await restored.getByRole('button', { name: 'Create reader phrase', exact: true }).click();
+    const unrelated = await restored.getByLabel('Your reader recovery phrase', { exact: true }).inputValue();
+    await restored.getByRole('button', { name: 'Hide backup' }).click();
+    secrets.push(...await secretEncodings(unrelated));
+    for (const [index, article] of purchases.entries()) {
+      const response = restored.waitForResponse(r => new URL(r.url()).pathname === `/article/${article.id}`);
+      await restored.getByRole('button', { name: `Select ${article.title}`, exact: true }).click();
+      expect((await response).status()).toBe(402);
+      await expect(restored.getByLabel('Payment request', { exact: true })).toBeVisible();
+      expect(restoredAudit.articles.at(-1)?.key).not.toBe(keys[index]);
+      await expect(restored.getByRole('article')).toHaveCount(0);
+      await restoredAudit.assertPrivate(restored, secrets);
+    }
   } finally { await fresh.close(); }
 });
 
