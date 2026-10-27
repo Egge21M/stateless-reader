@@ -26,7 +26,7 @@ test("selecting an article identifies the intended read without claiming access"
   await expect(selection.getByRole("heading", { name: "The quiet web", exact: true })).toBeFocused();
   await expect(selection).toContainText("21 sat");
   await expect(selection).toContainText("Full article locked");
-  await expect(selection).toContainText("Create or restore a reader phrase to check access or purchase this article.");
+  await expect(selection).toContainText("Use a passkey or recovery phrase to check access or purchase this article.");
   await expect(first).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByText("A quiet website begins with a stopping point.", { exact: false })).toHaveCount(0);
 

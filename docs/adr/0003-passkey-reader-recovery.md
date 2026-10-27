@@ -1,0 +1,7 @@
+# Recover a reader locally with a passkey PRF
+
+Extend the randomly generated phrase entry in [ADR 0001](0001-accountless-article-access.md) with a discoverable WebAuthn passkey whose PRF output deterministically produces a twelve-word reader recovery phrase. Keep the existing BIP39 seed and article-key protocol, so the phrase independently recovers the same purchases; neither a publisher account nor a stored encrypted recovery blob is needed. Freeze the [passkey derivation v1](../protocol/passkey-reader-v1.md) because changing it after purchases would create a different reader.
+
+The primary entry attempts an existing passkey. An unsuccessful or cancelled request must never automatically create another reader: WebAuthn cannot reliably distinguish absence from cancellation. Creation is an explicit fallback. Require actual PRF output before unlocking, and keep phrase-only recovery available when a provider lacks PRF support.
+
+A newly created passkey creates a different reader, including when the user already has a phrase-only reader. There is no implicit linking, publisher-assisted reset, or multi-passkey migration. The credential is scoped to the current hostname; changing domains requires phrase recovery. The app retains no credential ID or recovery material across reloads, although the user's passkey provider may store and synchronize the credential. Compatibility across real providers and synced devices still requires live testing.

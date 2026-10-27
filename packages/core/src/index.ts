@@ -1,5 +1,6 @@
 export const appName = "Stateless Reader";
 export * from "./reader-crypto";
+export * from "./passkey-reader";
 
 /** Publisher payment terms for access to an article. */
 export interface ArticleOffer {

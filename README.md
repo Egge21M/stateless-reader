@@ -1,8 +1,8 @@
 # Stateless Reader
 
 An accountless premium web reader proof of concept: readers buy individual
-articles with Cashu and regain access using a reader-owned 12-word recovery
-phrase. Article-specific keys avoid a shared cryptographic identifier across
+articles with Cashu and regain access using a passkey or a reader-owned
+12-word recovery phrase. Article-specific keys avoid a shared cryptographic identifier across
 different articles, while the publisher retains access grants and its Cashu
 wallet state.
 
@@ -21,11 +21,21 @@ for the agreed scope and privacy boundaries.
 
 ## Recovering purchases
 
-Create a reader phrase and back up its twelve words privately before paying.
+Open **Profile** and choose **Continue with passkey**. Your device or password
+manager offers existing passkeys and may offer another device. If that fails or
+you cancel, **Create a new reader** explicitly creates a passkey for a new reader.
+A new passkey does not recover purchases from an old passkey or phrase. Passkeys
+must support WebAuthn PRF; unsupported providers leave the reader locked.
+
+Back up the twelve-word phrase shown after creation privately before paying.
+**Show backup** reveals it again later. It recovers the same reader independently
+of the passkey. **Use a recovery phrase** also offers the original phrase-only
+creation and restoration flow. Never import a wallet's phrase here.
 Use a separate Cashu wallet to pay the article's request. Each article has its
 own derived key and purchase: buying one does not unlock another.
 
-To return in a fresh browser, enter the same twelve words in **Restore reader
+To return, choose **Continue with passkey** and select the same credential, or
+expand **Use a recovery phrase**, enter the same twelve words in **Restore reader
 recovery phrase**, choose **Restore reader**, then open a purchased article.
 Repeat for the second purchase; neither requires another payment. Restoration
 does not scan the catalogue or produce a purchase history. Access is checked
@@ -36,9 +46,14 @@ content.
 
 The phrase, reader seed and article private keys stay in tab memory. **Lock
 reader** clears active application state, and reloading leaves the reader locked;
-there is no saved browser credential to recover it automatically. Restore the
-phrase again to read. JavaScript cannot guarantee erasure of every memory copy.
-Losing the phrase loses access; sharing it shares access to all its purchases.
+the app saves no credential ID, seed, or recovery blob. The passkey provider
+stores the credential and may sync it. Unlock with the same passkey or restore
+the phrase again to read. JavaScript cannot guarantee erasure of every memory
+copy. Losing both passkey and phrase loses access; sharing either shares access.
+Passkeys are tied to the site's hostname. Keep the phrase for domain changes
+or providers that cannot reproduce the same PRF secret on another device.
+See [passkey recovery v1](docs/protocol/passkey-reader-v1.md) for the frozen
+derivation and compatibility limits.
 There is no publisher-assisted password reset. Do not enter your Cashu wallet
 phrase in the reader.
 

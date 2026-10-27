@@ -211,7 +211,7 @@ export function App() {
                   <LockKeyholeIcon aria-hidden="true" />
                   <AlertTitle>Full article locked</AlertTitle>
                   <AlertDescription>
-                    Create or restore a reader phrase to check access or
+                    Use a passkey or recovery phrase to check access or
                     purchase this article.
                   </AlertDescription>
                 </Alert>

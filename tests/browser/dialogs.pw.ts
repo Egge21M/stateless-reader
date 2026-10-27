@@ -1,3 +1,4 @@
+import { openPhraseControls } from "./reader-journey";
 import { expect, test } from "@playwright/test";
 
 // Never retain phrase-bearing DOM snapshots or screenshots.
@@ -12,6 +13,7 @@ test("profile owns backup and draft, dismisses accessibly and returns focus", as
   ).toHaveCount(0);
   const trigger = page.getByRole("button", { name: "Profile", exact: true });
   await trigger.click();
+  await openPhraseControls(page);
   const dialog = page.getByRole("dialog", { name: "Your reader profile" });
   await expect(dialog).toBeVisible();
   await page
@@ -30,6 +32,7 @@ test("profile owns backup and draft, dismisses accessibly and returns focus", as
   ).toHaveCount(0);
   await expect(trigger).toBeFocused();
   await trigger.click();
+  await openPhraseControls(page);
   await expect(
     dialog.getByLabel("Restore reader recovery phrase", { exact: true }),
   ).toHaveValue("");
@@ -52,6 +55,7 @@ for (const dismissal of ["Escape", "outside", "Close"] as const) {
   }) => {
     await page.goto("/");
     await page.getByRole("button", { name: "Profile", exact: true }).click();
+  await openPhraseControls(page);
     await page
       .getByRole("button", { name: "Create reader phrase", exact: true })
       .click();
@@ -117,12 +121,14 @@ test("locked article opens profile, returns focus, and waits for profile dismiss
     exact: true,
   });
   await entry.click();
+  await openPhraseControls(page);
   await expect(
     page.getByRole("dialog", { name: "Your reader profile" }),
   ).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(entry).toBeFocused();
   await entry.click();
+  await openPhraseControls(page);
   await page
     .getByRole("button", { name: "Create reader phrase", exact: true })
     .click();
@@ -156,6 +162,7 @@ test("dismissing profile during phrase creation cannot unlock a hidden reader", 
 }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Profile", exact: true }).click();
+  await openPhraseControls(page);
   // Two real controls, before the asynchronous derivation can finish.
   await page.getByRole("dialog").evaluate((dialog) => {
     const buttons = [...dialog.querySelectorAll("button")];
@@ -167,6 +174,7 @@ test("dismissing profile during phrase creation cannot unlock a hidden reader", 
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.waitForTimeout(400);
   await page.getByRole("button", { name: "Profile", exact: true }).click();
+  await openPhraseControls(page);
   await expect(page.getByText("Reader locked", { exact: true })).toBeVisible();
   await expect(
     page.getByLabel("Your reader recovery phrase", { exact: true }),

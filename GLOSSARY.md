@@ -26,6 +26,9 @@ The reader-held secret from which their article keys can be recreated, separate 
 **Reader recovery phrase**:
 The sequence of words a reader backs up and uses to recreate their reader seed and regain access to purchased articles.
 
+**Reader passkey**:
+A reader-controlled credential that recreates a dedicated reader seed. A newly created reader passkey represents a separate reader, rather than an additional way to access an existing reader's purchases.
+
 **Access grant**:
 The publisher's non-expiring authorization for a particular public key to repeatedly access a particular article, for as long as the publisher makes that article available.
 _Avoid_: Account, subscription
