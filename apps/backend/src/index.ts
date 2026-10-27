@@ -19,6 +19,7 @@ if (import.meta.main) {
     const publisher = startPublisher({
       hostname: process.env.HOST ?? '127.0.0.1', port: Number(process.env.PORT ?? 3000),
       databasePath, publicOrigin: process.env.PUBLIC_ORIGIN, settlement,
+      frontendDirectory: process.env.FRONTEND_DIST_PATH,
     });
     console.log(`Backend listening on ${publisher.url}`);
     let stopping = false;
@@ -33,7 +34,7 @@ if (import.meta.main) {
   } catch {
     try { await settlement?.close(); } catch { /* Keep startup errors secret-free. */ }
     // Do not print underlying exceptions: mint/crypto errors may include proofs/secrets.
-    console.error('Publisher startup failed. Check the 64-byte PUBLISHER_SEED_HEX, separate database paths, and listener configuration.');
+    console.error('Publisher startup failed. Check the 64-byte PUBLISHER_SEED_HEX, separate database paths, frontend build, and listener configuration.');
     process.exitCode = 1;
   }
 }

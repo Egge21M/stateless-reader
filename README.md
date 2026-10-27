@@ -13,6 +13,8 @@ in a fresh browser using only the recovery phrase, without paying again.
 
 The publisher and frontend implement the deterministic purchase and reader flow.
 The live external-wallet demonstration remains unverified. See the
+[HTTPS demo runbook](docs/demo/live-wallet.md) and
+[validation evidence](docs/evidence/issue-7/README.md), the
 [glossary](GLOSSARY.md), [access-model decision](docs/adr/0001-accountless-article-access.md),
 and [request-authentication decision](docs/adr/0002-short-lived-signed-article-requests.md)
 for the agreed scope and privacy boundaries.
@@ -106,6 +108,7 @@ bun run lint       # Lint workspaces that provide a lint script
 bun run typecheck  # Check every workspace
 bun run test       # Run HTTP, crypto-vector, and real-Coco tests
 bun run test:browser # Run the real frontend/publisher purchase checks
+bun run test:browser:production # Run those checks against the production build
 ```
 
 Commit `bun.lock` when dependencies change. For reproducible installs, use

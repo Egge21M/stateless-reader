@@ -1,6 +1,6 @@
 import type { PaymentRequiredResponse } from "@stateless-reader/core";
 import { afterEach, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startPublisher } from "./app";
@@ -75,6 +75,36 @@ test("unknown routes retain the JSON not-found response", async () => {
   const response = await fetch(new URL("/missing", publisher.url));
   expect(response.status).toBe(404);
   expect(await response.json()).toEqual({ error: "Not found" });
+});
+
+test("a production publisher serves the built reader and assets without exposing private files or masking API errors", async () => {
+  const databasePath = await temporaryDatabase();
+  const frontendDirectory = databasePath + ".frontend";
+  await mkdir(join(frontendDirectory, "assets"), { recursive: true });
+  await writeFile(join(frontendDirectory, "index.html"), '<!doctype html><script src="/assets/reader.js"></script>');
+  await writeFile(join(frontendDirectory, "assets/reader.js"), 'document.title = "Reader";');
+  await writeFile(join(frontendDirectory, ".env"), "private configuration");
+  await symlink(databasePath, join(frontendDirectory, "assets/private.js"));
+  const publisher = startPublisher({ port: 0, databasePath, frontendDirectory });
+  publishers.push(publisher);
+
+  const page = await fetch(new URL("/", publisher.url));
+  expect(page.status).toBe(200);
+  expect(page.headers.get("content-type")).toContain("text/html");
+  expect(page.headers.get("cache-control")).toBe("no-store");
+  expect(await page.text()).toContain('/assets/reader.js');
+  const asset = await fetch(new URL("/assets/reader.js", publisher.url));
+  expect(asset.status).toBe(200);
+  expect(asset.headers.get("content-type")).toContain("javascript");
+  expect(await asset.text()).toBe('document.title = "Reader";');
+  expect((await fetch(new URL("/articles", publisher.url))).status).toBe(200);
+  expect((await fetch(new URL("/article/the-quiet-web", publisher.url))).status).toBe(401);
+  for (const path of ["/missing", "/assets/missing.js", "/.env", "/application.sqlite", "/assets/private.js", "/assets/%2e%2e/.env", "/src/articles.ts"]) {
+    const response = await fetch(new URL(path, publisher.url));
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "Not found" });
+  }
+  expect((await fetch(publisher.url, { method: "POST" })).status).toBe(404);
 });
 
 test("readers can browse stable article metadata and fixed sat offers without authentication", async () => {
@@ -177,8 +207,12 @@ test("publishers stop independently and release their ports for restart", async 
 
 test.each(["SIGINT", "SIGTERM"] as const)("CLI startup serves HTTP and shuts down on %s", async (signal) => {
   const databasePath = await temporaryDatabase();
+  const frontendDirectory = databasePath + ".frontend";
+  await mkdir(join(frontendDirectory, "assets"), { recursive: true });
+  await writeFile(join(frontendDirectory, "index.html"), '<!doctype html><title>Built reader</title>');
   const child = Bun.spawn([process.execPath, new URL("./index.ts", import.meta.url).pathname], {
     env: { ...process.env, HOST: "127.0.0.1", PORT: "0", DATABASE_PATH: databasePath,
+      FRONTEND_DIST_PATH: frontendDirectory,
       COCO_DATABASE_PATH: databasePath + ".coco", PUBLISHER_SEED_HEX: "2a".repeat(64) },
     stdout: "pipe",
     stderr: "pipe",
@@ -192,6 +226,9 @@ test.each(["SIGINT", "SIGTERM"] as const)("CLI startup serves HTTP and shuts dow
     const output = new TextDecoder().decode(value).trim();
     expect(output).toStartWith("Backend listening on http://127.0.0.1:");
     const url = new URL(output.slice("Backend listening on ".length));
+    const page = await fetch(url);
+    expect(page.status).toBe(200);
+    expect(await page.text()).toContain('<title>Built reader</title>');
     const response = await fetch(new URL("/health", url));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ status: "ok" });

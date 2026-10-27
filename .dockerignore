@@ -1,0 +1,26 @@
+# Allow only build inputs; private state and environment files never enter context.
+**
+!package.json
+!bun.lock
+!tsconfig.json
+!apps/
+!apps/*/
+!apps/*/package.json
+!apps/*/tsconfig*.json
+!apps/frontend/index.html
+!apps/frontend/vite.config.ts
+!apps/*/src/
+!apps/*/src/**
+!apps/backend/drizzle/
+!apps/backend/drizzle/**
+!packages/
+!packages/*/
+!packages/*/package.json
+!packages/*/tsconfig.json
+!packages/*/src/
+!packages/*/src/**
+**/.env*
+**/*.sqlite*
+**/*.key
+**/*.pem
+**/*.log
