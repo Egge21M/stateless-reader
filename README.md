@@ -1,5 +1,21 @@
 # Stateless Reader
 
+An accountless premium web reader proof of concept: readers buy individual
+articles with Cashu and regain access using a reader-owned 12-word recovery
+phrase. Article-specific keys avoid a shared cryptographic identifier across
+different articles, while the publisher retains access grants and its Cashu
+wallet state.
+
+The planned demo serves 5–10 articles from one publisher, uses regular Cashu
+payment requests with HTTP transport, and delegates backend Cashu operations
+to Coco. The defining demonstration is buying an article, then restoring access
+in a fresh browser using only the recovery phrase, without paying again.
+
+The repository currently contains the application scaffolding. See the
+[glossary](GLOSSARY.md), [access-model decision](docs/adr/0001-accountless-article-access.md),
+and [request-authentication decision](docs/adr/0002-short-lived-signed-article-requests.md)
+for the agreed scope and privacy boundaries.
+
 Bun and TypeScript monorepo. Use Bun 1.3.14 or newer.
 
 ## Getting started
