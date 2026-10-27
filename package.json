@@ -9,8 +9,14 @@
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "dev": "bun run --filter @stateless-reader/reader dev",
+    "dev:frontend": "bun run --filter @stateless-reader/frontend dev",
+    "dev:backend": "bun run --filter @stateless-reader/backend dev",
+    "start:backend": "bun run --filter @stateless-reader/backend start",
+    "db:generate": "bun run --filter @stateless-reader/backend db:generate",
+    "db:migrate": "bun run --filter @stateless-reader/backend db:migrate",
     "start": "bun run --filter @stateless-reader/reader start",
     "build": "bun run --workspaces --if-present build",
+    "lint": "bun run --workspaces --if-present lint",
     "typecheck": "bun run --workspaces typecheck",
     "test": "bun test --pass-with-no-tests"
   },

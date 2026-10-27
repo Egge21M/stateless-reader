@@ -7,3 +7,7 @@ coverage/
 .env.*
 !.env.example
 .DS_Store
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
