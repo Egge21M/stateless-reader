@@ -1,5 +1,11 @@
 # Live external-wallet demonstration (#7)
 
+**Current deployment:** https://stateless-reader-egge21m.fly.dev on the owner's
+personal Fly organization. See [deployment evidence](../evidence/issue-7/fly-deployment.md)
+for the verified image, explicit migration and HTTPS checks. The owner will
+operate the funded wallet; real purchases/recovery are still pending. The
+preparation status below describes the initial runbook handoff.
+
 **Status: prepared, LIVE payment NOT PERFORMED. #7 remains incomplete.** No funded
 external wallet or authorization to spend was supplied. Nothing was deployed,
 provisioned, or paid during preparation. Follow this runbook only after the

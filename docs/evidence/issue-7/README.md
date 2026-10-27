@@ -1,5 +1,9 @@
 # #7 preparation evidence — LIVE demonstration pending
 
+**Deployment update:** the reviewed implementation is now deployed to personal
+Fly. See [deployment and public HTTPS evidence](fly-deployment.md). Live wallet
+payments remain pending. The following is the earlier preparation snapshot.
+
 Validation date: **2026-10-27 UTC**. This record does **not** complete #7.
 No external wallet payment, deployment, resource provisioning, account creation,
 or expenditure occurred. No funded wallet was supplied; the parent request for
