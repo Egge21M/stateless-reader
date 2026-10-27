@@ -68,6 +68,30 @@ test('a settled payment unlocks only its signed article and reader key', async (
   expect((await fetch(new URL(`/article/${articleId}`, publisher.url))).status).toBe(401);
 });
 
+test.each([
+  { id: null }, { memo: null }, { id: null, memo: null },
+  {}, { id: 'request-id', memo: 'Article payment' }, { id: '', memo: '' },
+])('optional NUT-18 metadata %j unlocks only after settlement', async (metadata) => {
+  let finalized = false;
+  const wallet = controlledSettlement();
+  const publisher = await harness({ async receive(token) {
+    return finalized ? wallet.receive(token) : { state: 'prepared' };
+  } });
+  const payload = { mint, unit: 'sat', proofs: [proof()], ...metadata };
+  const submit = () => fetch(new URL(`/payment/${articleId}/${publicKey}`, publisher.url), {
+    method: 'POST', headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+    body: JSON.stringify(payload),
+  });
+  expect((await read(publisher.url)).status).toBe(402);
+  const pending = await submit();
+  expect(pending.status).toBe(422);
+  expect(await pending.json()).toEqual({ error: 'Payment not finalized' });
+  expect((await read(publisher.url)).status).toBe(402);
+  finalized = true;
+  expect((await submit()).status).toBe(200);
+  expect((await read(publisher.url)).status).toBe(200);
+});
+
 test.each(paymentContentTypes)('JSON payment with Content-Type %s unlocks after settlement', async (contentType) => {
   let finalized = false;
   const wallet = controlledSettlement();
@@ -115,6 +139,8 @@ test.each(paymentContentTypes)('invalid NUT-18 requests with Content-Type %s rej
     ['', { ...valid, proofs: [{ ...validProof, id: 'unknown' }] }, 400],
     ['', { ...valid, proofs: [{ ...validProof, secret: '' }] }, 400],
     ['', { ...valid, proofs: [{ ...validProof, witness: {} }] }, 400],
+    ['', { ...valid, proofs: [{ ...validProof, witness: null }] }, 400],
+    ['', { ...valid, proofs: [{ ...validProof, dleq: null }] }, 400],
     ['', { ...valid, proofs: [{ ...validProof, dleq: { e: 'bad' } }] }, 400],
     ['', { ...valid, memo: false }, 400],
     ['', { ...valid, id: 4 }, 400],
@@ -123,6 +149,11 @@ test.each(paymentContentTypes)('invalid NUT-18 requests with Content-Type %s rej
     [`/payment/${articleId}/garbage`, valid, 400],
     [`/payment/${articleId}/${'00'.repeat(32)}`, valid, 400],
   ];
+  // Null is accepted only for optional top-level metadata, never other wrong types.
+  for (const value of [false, 0, [], {}]) {
+    cases.push(['', { ...valid, id: value, memo: null }, 400]);
+    cases.push(['', { ...valid, id: null, memo: value }, 400]);
+  }
   for (const [path, payload, status] of cases) {
     const response = await fetch(new URL(path || `/payment/${articleId}/${publicKey}`, publisher.url), {
       method: 'POST', headers: { ...(contentType ? { 'Content-Type': contentType } : {}), Origin: 'https://wallet.example' },

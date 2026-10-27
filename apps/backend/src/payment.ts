@@ -56,9 +56,10 @@ export async function paymentToken(request: Request, offer: ArticleOffer): Promi
   let payload: unknown;
   try { payload = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
   catch { throw new PaymentError('Invalid payment JSON'); }
+  // CDK serializes absent optional request metadata as JSON null.
   if (!record(payload) || payload.mint !== offer.mint || payload.unit !== offer.unit ||
-      (payload.id !== undefined && typeof payload.id !== 'string') ||
-      (payload.memo !== undefined && typeof payload.memo !== 'string') ||
+      (payload.id != null && typeof payload.id !== 'string') ||
+      (payload.memo != null && typeof payload.memo !== 'string') ||
       !Array.isArray(payload.proofs) || payload.proofs.length === 0 || payload.proofs.length > 256) {
     throw new PaymentError('Invalid payment payload or mint/unit');
   }

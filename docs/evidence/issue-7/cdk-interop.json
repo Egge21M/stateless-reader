@@ -1,0 +1,182 @@
+{
+  "baseCommit": "e8ebcb73a2b7c1d61cf280567d730be7ba565702",
+  "sourceSha256": {
+    "apps/backend/src/app.ts": "516479f360d1567a120e0ced3efe87685dccdc9f2bff884ac1719a1d045d4c5b",
+    "apps/backend/src/payment.ts": "78880d5eca07aa97f2862a9e56e86a83bb5eee4a71363b096013c628be6273e6"
+  },
+  "generatedHttp402": {
+    "articleId": "the-quiet-web",
+    "publicKey": "360fc8d6daaa8ef054dbd8a3721cd3237f863dc9b9cc87f6df596abdfdde8dfb",
+    "protocolVersion": 1,
+    "offer": {
+      "amount": 21,
+      "unit": "sat",
+      "mint": "https://mint.minibits.cash/Bitcoin"
+    },
+    "paymentRequest": "creqApmF0gaNhdGRwb3N0YWF4bWh0dHA6Ly8xMjcuMC4wLjE6Mzk1ODMvcGF5bWVudC90aGUtcXVpZXQtd2ViLzM2MGZjOGQ2ZGFhYThlZjA1NGRiZDhhMzcyMWNkMzIzN2Y4NjNkYzliOWNjODdmNmRmNTk2YWJkZmRkZThkZmJhZ4BhYRVhdWNzYXRhbYF4Imh0dHBzOi8vbWludC5taW5pYml0cy5jYXNoL0JpdGNvaW5hZG1UaGUgcXVpZXQgd2ViYXP1"
+  },
+  "independentCiboriumDecode": {
+    "a": 21,
+    "d": "The quiet web",
+    "m": [
+      "https://mint.minibits.cash/Bitcoin"
+    ],
+    "s": true,
+    "t": [
+      {
+        "a": "http://127.0.0.1:39583/payment/the-quiet-web/360fc8d6daaa8ef054dbd8a3721cd3237f863dc9b9cc87f6df596abdfdde8dfb",
+        "g": [],
+        "t": "post"
+      }
+    ],
+    "u": "sat"
+  },
+  "officialCliParsers": [
+    {
+      "version": "0.17.7",
+      "case": "app_original",
+      "exit": 0,
+      "error": ""
+    },
+    {
+      "version": "0.18.2",
+      "case": "app_original",
+      "exit": 0,
+      "error": ""
+    }
+  ],
+  "cdk0182HttpClient": {
+    "body": "{\"error\":\"Payments unavailable\"}",
+    "delivered": false,
+    "kind": "http",
+    "path": "/cdk",
+    "status": 503
+  },
+  "cdk0182SerializedPayload": {
+    "id": null,
+    "memo": null,
+    "mint": "https://mint.minibits.cash/Bitcoin",
+    "proofs": [
+      {
+        "C": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "amount": 32,
+        "id": "00107937db0cc865",
+        "secret": "VALUELESS-CDK-INTEROP-FIXTURE-DO-NOT-FUND"
+      }
+    ],
+    "unit": "sat"
+  },
+  "optionalMetadataHttp": [
+    {
+      "kind": "app_validation",
+      "case": "omitted",
+      "status": 503,
+      "body": {
+        "error": "Payments unavailable"
+      }
+    },
+    {
+      "kind": "app_validation",
+      "case": "id_null",
+      "status": 503,
+      "body": {
+        "error": "Payments unavailable"
+      }
+    },
+    {
+      "kind": "app_validation",
+      "case": "memo_null",
+      "status": 503,
+      "body": {
+        "error": "Payments unavailable"
+      }
+    },
+    {
+      "kind": "app_validation",
+      "case": "both_null",
+      "status": 503,
+      "body": {
+        "error": "Payments unavailable"
+      }
+    }
+  ],
+  "cashumeShapeControls": [
+    {
+      "case": "omitted",
+      "status": 503,
+      "body": {
+        "error": "Payments unavailable"
+      },
+      "idPresent": false,
+      "memoPresent": false,
+      "amountType": "number",
+      "mint": "https://mint.minibits.cash/Bitcoin",
+      "proofKeys": [
+        "secret",
+        "C",
+        "id",
+        "amount",
+        "reserved"
+      ],
+      "keysetId": "00107937db0cc865"
+    },
+    {
+      "case": "full_id",
+      "status": 503,
+      "body": {
+        "error": "Payments unavailable"
+      },
+      "idPresent": false,
+      "memoPresent": false,
+      "amountType": "number",
+      "mint": "https://mint.minibits.cash/Bitcoin",
+      "proofKeys": [
+        "secret",
+        "C",
+        "id",
+        "amount",
+        "reserved"
+      ],
+      "keysetId": "01fc0ec0e59cd6fa01b7a88f8cd77fce81fd1e64bca67d752e984992b7a3c3a821"
+    },
+    {
+      "case": "dleq_present",
+      "status": 503,
+      "body": {
+        "error": "Payments unavailable"
+      },
+      "idPresent": false,
+      "memoPresent": false,
+      "amountType": "number",
+      "mint": "https://mint.minibits.cash/Bitcoin",
+      "proofKeys": [
+        "secret",
+        "C",
+        "id",
+        "dleq",
+        "amount",
+        "reserved"
+      ],
+      "keysetId": "00107937db0cc865"
+    },
+    {
+      "case": "trailing_mint",
+      "status": 400,
+      "body": {
+        "error": "Invalid payment payload or mint/unit"
+      },
+      "idPresent": false,
+      "memoPresent": false,
+      "amountType": "number",
+      "mint": "https://mint.minibits.cash/Bitcoin/",
+      "proofKeys": [
+        "secret",
+        "C",
+        "id",
+        "amount",
+        "reserved"
+      ],
+      "keysetId": "00107937db0cc865"
+    }
+  ]
+}

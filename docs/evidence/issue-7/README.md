@@ -6,6 +6,9 @@ The user subsequently confirmed Macadamia receives HTTP 415 and reported generic
 delivery failures from Cashu.me/CDK. The earlier phrase “it does work” is ambiguous:
 no successful wallet/build, purchase, or restoration has been identified.
 See [Macadamia Content-Type fix and local regression evidence](macadamia-content-type.md).
+The subsequent [CDK interoperability fixes](cdk-interop.md) include a real generated
+request accepted by pinned CDK parsers and nullable-payload HTTP regression evidence.
+They do not establish the cause of the user's remaining Cashu.me delivery failure.
 Live wallet acceptance remains pending. The following is the earlier preparation snapshot.
 
 Validation date: **2026-10-27 UTC**. This record does **not** complete #7.
