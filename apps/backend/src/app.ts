@@ -60,6 +60,12 @@ export function startPublisher(options: PublisherOptions) {
   )).get();
 
   try {
+    // Read the required schema without creating or migrating it. Fail before listening.
+    try {
+      database.db.select().from(accessGrants).limit(0).all();
+    } catch {
+      throw new Error("Application database is not prepared. Run the application migration command before starting the publisher.");
+    }
     const server = Bun.serve({
       hostname: options.hostname ?? "127.0.0.1",
       port: options.port ?? 3000,

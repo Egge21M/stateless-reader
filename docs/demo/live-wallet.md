@@ -22,8 +22,8 @@ bun test
 bun run test:browser:production
 ```
 
-The production runtime is `apps/backend/dist/index.js`, the adjacent
-`apps/backend/drizzle/` directory, and `apps/frontend/dist/`. Ship all three.
+The production runtime is `apps/backend/dist/` (both `index.js` and `migrate.js`),
+the adjacent `apps/backend/drizzle/` directory, and `apps/frontend/dist/`. Ship all three.
 `FRONTEND_DIST_PATH` points at the built frontend: the Bun publisher serves `/`
 and its assets on the same origin as `/articles`, `/article/*`, and `/payment/*`.
 It does not run Vite, serve source files, or turn unknown API paths into HTML.
@@ -32,9 +32,11 @@ Vite dev/preview are not this deployment's production server.
 
 One process must exclusively own **two separate durable SQLite files**:
 
-- `DATABASE_PATH`: application grants. Opening the publisher applies committed
-  Drizzle SQL before listening; `bun run db:migrate` can also apply it explicitly.
-  This is application migration ownership, not Coco migration ownership.
+- `DATABASE_PATH`: application grants. Run the explicit application migration
+  command against this retained file with the publisher stopped, before first
+  start and whenever a release adds migrations. Opening/listening never applies
+  application migrations. Startup rejects a missing/unusable grant schema; it
+  does not detect every possible pending migration.
 - `COCO_DATABASE_PATH`: received proofs, counters and operation records. The
   pinned Coco initializer applies its own migrations. Do not run Drizzle on this
   file or inspect/change wallet tables to establish a balance.
@@ -75,13 +77,19 @@ with os.fdopen(fd, 'w') as f:
     f.write(f'PUBLIC_ORIGIN={origin}\nHOST=127.0.0.1\nPORT=3000\n')
 PY
 # From the publisher checkout; ensure no inherited variables override this file.
-bun --env-file=/srv/stateless-reader-state/publisher.env apps/backend/src/db/migrate.ts
+bun --env-file=/srv/stateless-reader-state/publisher.env apps/backend/dist/migrate.js
 bun --env-file=/srv/stateless-reader-state/publisher.env apps/backend/dist/index.js
 ```
 
-The explicit migration command operates only on application state. Startup also
-applies application migrations, and initializes Coco separately. Stop/restart
-uses the same command and same private file; do not regenerate the seed. A
+The compiled migration command operates only on application state and exits
+without opening Coco or listening. For source development, use
+`bun --env-file=/srv/stateless-reader-state/publisher.env apps/backend/src/db/migrate.ts`
+or `bun run db:migrate` with the same exported absolute `DATABASE_PATH`. Both
+commands apply the same committed SQL. Repeat migration safely before starting
+a new release; applied migrations preserve retained grants. Normal restarts of
+the same prepared release need only the server command. Server startup still
+initializes Coco and its separate automatic wallet migrations. Stop/restart
+uses the same private file; do not regenerate the seed. A
 supervisor must deliver SIGTERM to Bun and wait for accepted payments to drain.
 
 Dependencies remain pinned at Coco core/Bun **2.0.0** and cashu-ts
@@ -103,9 +111,35 @@ caching of article/payment routes; the app sends `Cache-Control: no-store`.
 
 **Persistent host / Fly option.** `Dockerfile` builds a pinned Bun image containing
 only the compiled runtime, migrations, and built frontend. `.dockerignore`
-restricts build inputs; runtime state/seed are supplied separately. Copy
-`deploy/fly.toml.example` to `fly.toml`, select the authorized app/region, and replace
-`PUBLIC_ORIGIN`. A parent/operator must explicitly authorize the following
+restricts build inputs; runtime state/seed are supplied separately. The image's
+default command starts only the server. For Docker on an authorized host, stop
+the old container and wait for graceful exit, then migrate the **same mounted
+state directory** before starting its replacement:
+
+```sh
+# publisher-image identifies the exact new image built with this Dockerfile.
+docker run --rm --mount type=bind,src=/srv/stateless-reader-state,dst=/data \
+  publisher-image sh -c 'umask 077; exec bun /app/backend/dist/migrate.js'
+# Only after migration succeeds; publisher.env supplies the stable seed/origin.
+# Explicit -e paths override any host-specific paths in that private file.
+docker run --name stateless-reader --env-file /srv/stateless-reader-state/publisher.env \
+  --mount type=bind,src=/srv/stateless-reader-state,dst=/data \
+  -e DATABASE_PATH=/data/application.sqlite -e COCO_DATABASE_PATH=/data/coco.sqlite \
+  -e FRONTEND_DIST_PATH=/app/frontend/dist -e HOST=0.0.0.0 -e PORT=3000 \
+  -p 127.0.0.1:3000:3000 publisher-image
+```
+
+Remove the old stopped container before reusing its name; retain its mounted
+state. A normal same-image restart does not need another migration invocation.
+Neither an unmounted one-off container nor the image build can prepare durable
+application state.
+
+For Fly, copy `deploy/fly.toml.example` to `fly.toml` and
+`deploy/fly.migrate.toml.example` to `fly.migrate.toml`. Select the **same**
+authorized app/region/volume in both and replace `PUBLIC_ORIGIN` in `fly.toml`.
+The maintenance config replaces the `app` process with `sleep infinity` and has
+no HTTP service: it keeps the mounted Machine available for an explicit command
+without starting the publisher. A parent/operator must authorize the following
 resource actions before executing them:
 
 1. Select/create the app and **one** `publisher_data` volume in its region. Mount
@@ -114,23 +148,37 @@ resource actions before executing them:
    channel. For Fly, `fly secrets import --stage -a APP` can consume a private file
    containing only that assignment via stdin; do not paste its value into chat or
    a command argument, and do not import host-specific filesystem settings.
-3. Validate the edited configuration and build the image. For first deployment,
-   `fly deploy -c fly.toml --ha=false` disables the default spare Machine. Inspect
-   the resulting Machine count and volume attachment: exactly **one** writer.
+3. Validate both edited configurations. For an update, pause the demo, let wallet
+   operations finish, gracefully stop the publisher, and take the stopped backup.
+   Deploy the maintenance config:
+   `fly deploy -c fly.migrate.toml --ha=false --strategy immediate`.
+   Inspect the Machine count and volume attachment: exactly **one** Machine,
+   the retained `/data` volume, and no publisher process. Record its Machine ID
+   and immutable image digest; do not proceed if the volume is new/unexpected.
+4. Run the explicit migration **on that Machine**, not a release Machine:
+   `fly ssh console -a APP --machine MACHINE_ID -C 'sh -c "umask 077; exec bun /app/backend/dist/migrate.js"'`.
+   Require a successful exit. On failure, leave the publisher stopped and inspect
+   the error; do not proceed to serve traffic.
+5. Deploy the server config using that same image:
+   `fly deploy -c fly.toml --image IMAGE_DIGEST --ha=false --strategy immediate`.
+   Confirm the same retained volume and exactly **one** publisher process.
    Do not scale out or use blue/green or canary deployments.
-4. Fly terminates HTTPS on public port 443 and forwards to `0.0.0.0:3000`; health
+6. Fly terminates HTTPS on public port 443 and forwards to `0.0.0.0:3000`; health
    checks use `/health`. Its success checks SQLite connectivity, not mint health,
    seed correctness against existing funds, or a completed payment.
-5. For updates, pause the demo and wait for wallet operations to finish before
-   stopping the old process. Confirm it exited before bringing up a replacement
-   on the retained volume. The configured 300-second platform kill timeout is
+7. Repeat the maintenance → explicit migration → server sequence for schema
+   updates; same-release restarts simply reopen the prepared database.
+   The configured 300-second platform kill timeout is
    finite; it is not a guarantee that a stalled mint operation will finish.
 
 There is intentionally no Fly `release_command`: release Machines do not mount
-application volumes. Migrations run in the actual publisher process with its
-volume. Volume backups and a separately protected seed are still required.
+application volumes. The operator runs migrations as a separate command on the
+maintenance Machine with the retained volume mounted and the publisher stopped.
+Volume backups and a separately protected seed are still required.
 See [Fly app configuration](https://docs.fly.io/reference/configuration) and
-[volume persistence](https://docs.fly.io/launch/volume-storage). Docker is not
+[deploy options](https://docs.fly.io/flyctl/cmd/fly_deploy) /
+[SSH command execution](https://docs.fly.io/flyctl/cmd/fly_ssh_console). This
+maintenance sequence has not been deployed here. Docker is not
 installed in the preparation environment; the Docker build/deploy is pending.
 The compiled runtime layout was exercised independently without `node_modules`.
 
@@ -304,7 +352,8 @@ a running publisher. Do not delete sidecars by hand.
 
 For a routine move/restoration, stop all writers, restore that latest consistent
 stopped snapshot to the operator-owned private paths, supply the same seed and
-compatible build/migrations, then start one process. Verify health, balances and
+compatible build, explicitly apply its application migrations while stopped,
+then start one process. Verify health, balances and
 signed reads. Never run both the old and restored copies. An outdated wallet
 snapshot is not a guarantee of fund recovery or safe counter reuse. Publisher
 data loss, wallet disaster recovery, and paid-but-ungranted repair are not solved

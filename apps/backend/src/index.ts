@@ -34,7 +34,7 @@ if (import.meta.main) {
   } catch {
     try { await settlement?.close(); } catch { /* Keep startup errors secret-free. */ }
     // Do not print underlying exceptions: mint/crypto errors may include proofs/secrets.
-    console.error('Publisher startup failed. Check the 64-byte PUBLISHER_SEED_HEX, separate database paths, frontend build, and listener configuration.');
+    console.error('Publisher startup failed. Check explicit application migrations, the 64-byte PUBLISHER_SEED_HEX, separate database paths, frontend build, and listener configuration.');
     process.exitCode = 1;
   }
 }

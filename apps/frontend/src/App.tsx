@@ -1,4 +1,5 @@
 import { PaymentPanel } from "@/components/payment-panel"
+import type { ArticleOffer } from "@stateless-reader/core"
 import { useReader } from "@/lib/use-reader"
 import { ReaderControls } from "@/components/reader-controls"
 import { useEffect, useRef, useState } from "react"
@@ -32,7 +33,7 @@ interface ArticleMetadata {
   id: string
   title: string
   preview: string
-  offer: { amount: number; unit: string; mint: string }
+  offer: ArticleOffer
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

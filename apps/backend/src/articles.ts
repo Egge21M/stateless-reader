@@ -1,3 +1,5 @@
+import type { ArticleOffer } from "@stateless-reader/core";
+
 // Publisher-only fixtures. IDs and offers are permanent: corrections may change
 // a body, but an ID must never be reassigned to an unrelated article.
 const mint = "https://mint.minibits.cash/Bitcoin";
@@ -6,7 +8,7 @@ export interface PublisherArticle {
   id: string;
   title: string;
   preview: string;
-  offer: { amount: number; unit: string; mint: string };
+  offer: ArticleOffer;
   body: string;
 }
 

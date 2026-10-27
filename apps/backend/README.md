@@ -9,7 +9,8 @@ signing challenges.
 ## Operator configuration
 
 Install with `bun install --frozen-lockfile`. Configure these variables privately
-before `bun run dev:backend` or `bun run start:backend` from the repository root:
+before `bun run db:migrate`, then `bun run dev:backend` or `bun run start:backend`
+from the repository root:
 
 - `PUBLISHER_SEED_HEX`: required, exactly 128 hexadecimal characters representing
   a stable 64-byte publisher seed. Provision this once using a secure source and
@@ -91,14 +92,21 @@ operation recovery; disabled workers do not disable that recovery.
 
 ## Persistence, migration and lifecycle
 
-Opening the application database applies the versioned SQL in `drizzle/` before
-listening. `bun run db:migrate` also applies it explicitly. Define changes in
+Application migrations are explicit and separate from opening the database or
+starting the server. With the publisher stopped, run `bun run db:migrate` against
+the retained `DATABASE_PATH` before the first start and whenever new migrations
+are shipped. It applies the versioned SQL in `drizzle/` and closes the connection.
+Startup reads the required grant schema and fails before listening if it is
+missing or unusable; it never applies SQL migrations. This check is not a pending
+migration detector: operators must apply each release's migrations. Define changes in
 `src/db/schema.ts`, run `bun run db:generate`, and commit the generated SQL and
 metadata. The grant primary key is `(article_id, public_key, protocol_version)`
 and grants have no expiry. Coco owns its own migrations and proof/operation tables;
 the application never reads or modifies them through Drizzle.
 
 Importing `src/app.ts` or `src/index.ts` has no listener/signal side effects.
+Explicitly call `migrateApplication(databasePath)` from `src/db/migrate.ts` to
+prepare temporary databases in test setup. Importing it does not migrate anything.
 `startPublisher({ databasePath, port: 0, settlement? })` starts an isolated
 publisher and reports its URL. Without settlement it serves the catalogue and
 signed access requests but rejects payments with 503. `settlement` is the external
@@ -122,13 +130,17 @@ await the same path. Callers retain responsibility for closing a supplied adapte
 if `startPublisher` itself throws before returning. There is no forced drain
 deadline; allow active mint requests to finish during deployment shutdown.
 
-`bun run build` produces `dist/index.js`. Ship the sibling `drizzle/` directory
-with that bundle. Run `bun dist/index.js` from the backend workspace with the same
-operator configuration and durable file paths.
+`bun run build` produces `dist/index.js` and the standalone `dist/migrate.js`.
+Ship both with the sibling `drizzle/` directory. From the backend workspace,
+run `bun dist/migrate.js` explicitly while the publisher is stopped, then run
+`bun dist/index.js`, with the same absolute `DATABASE_PATH`. Neither the migration
+bundle nor the server needs source files or `node_modules` in the deployment.
+The migration command only opens application state; Coco still initializes and
+migrates its separate wallet file automatically during publisher startup.
 
 ## Deterministic verification and follow-up
 
-`bun test` exercises the public HTTP API using temporary SQLite and a controlled
+`bun test` exercises the public HTTP API using explicitly migrated temporary SQLite and a controlled
 settlement boundary, plus real Coco with the valueless HTTP mint in
 `tests/fake-mint.ts`. The fixture verifies signatures/spentness, blind-signs real
 outputs, and supports restore/checkstate. Its `/test/issue` route exists only in

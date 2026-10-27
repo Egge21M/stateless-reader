@@ -2,6 +2,7 @@ import { afterEach, expect, test, spyOn } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { restoreReader, signArticleRequest, deriveArticleKey } from '@stateless-reader/core';
 import { startPublisher } from './app';
+import { migrateApplication } from './db/migrate';
 import type { Settlement } from './settlement';
 
 const resources: { stop(): Promise<void> }[] = [];
@@ -32,6 +33,7 @@ function controlledSettlement() {
 }
 async function harness(settlement: Settlement = controlledSettlement()) {
   const dir = await mkdtemp('/tmp/purchase-'); directories.push(dir);
+  migrateApplication(`${dir}/grants.sqlite`);
   const publisher = startPublisher({ port: 0, databasePath: `${dir}/grants.sqlite`,
     settlement,
   });

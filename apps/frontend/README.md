@@ -24,10 +24,11 @@ See the frozen [v1 compatibility contract](../../docs/protocol/reader-v1.md).
 
 From the repository root, install with `bun install`, configure the publisher
 seed and database paths as described in [the backend guide](../backend/README.md),
-then run the publisher and
+then explicitly migrate application state and run the publisher and
 frontend in separate terminals:
 
 ```sh
+bun run db:migrate
 bun run dev:backend
 bun run dev:frontend
 ```
@@ -51,7 +52,8 @@ bunx playwright install chromium  # once, if not already installed
 bun run test:browser
 ```
 
-The browser suite launches the real publisher with a temporary SQLite database
+The browser suite explicitly migrates a temporary application SQLite database,
+then launches the real publisher
 and Vite on `127.0.0.1:4173`. That port must be free. It verifies public metadata,
 keyboard selection and focus, loading, empty, and error/retry behavior. A
 regression check rejects backend fixture source requests. Only rare HTTP

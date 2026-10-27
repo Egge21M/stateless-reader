@@ -15,4 +15,6 @@ ENV HOST=0.0.0.0 PORT=3000 \
 RUN mkdir -p /data && chmod 700 /data
 EXPOSE 3000
 STOPSIGNAL SIGTERM
+# Prepare the mounted application DB separately with /app/backend/dist/migrate.js.
+# This default command starts only the publisher; it never runs app migrations.
 CMD ["sh", "-c", "umask 077; exec bun /app/backend/dist/index.js"]

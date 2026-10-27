@@ -1,4 +1,5 @@
 import { normalizeProofAmounts, type Proof, type Token } from '@cashu/cashu-ts';
+import type { ArticleOffer } from '@stateless-reader/core';
 import { ed25519 } from '@noble/curves/ed25519.js';
 import { secp256k1 } from '@noble/curves/secp256k1.js';
 
@@ -27,7 +28,7 @@ function text(value: unknown, max: number): value is string {
 const scalar = (value: unknown) => typeof value === 'string' && /^[0-9a-fA-F]{64}$/.test(value);
 
 /** Validate wire shape only; authenticity/spentness still require a successful swap. */
-export async function paymentToken(request: Request, offer: { mint: string; unit: string; amount: number }): Promise<Token> {
+export async function paymentToken(request: Request, offer: ArticleOffer): Promise<Token> {
   if (request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() !== 'application/json') {
     throw new PaymentError('Expected application/json', 415);
   }

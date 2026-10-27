@@ -1,9 +1,10 @@
-import type { PaymentRequiredResponse } from "@stateless-reader/core";
+import type { ArticleOffer, PaymentRequiredResponse } from "@stateless-reader/core";
 import { afterEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startPublisher } from "./app";
+import { migrateApplication } from "./db/migrate";
 
 const publishers: ReturnType<typeof startPublisher>[] = [];
 const directories: string[] = [];
@@ -13,14 +14,16 @@ interface CatalogueResponse {
     id: string;
     title: string;
     preview: string;
-    offer: { amount: number; unit: string; mint: string };
+    offer: ArticleOffer;
   }[];
 }
 
-async function temporaryDatabase() {
+async function temporaryDatabase(prepared = true) {
   const directory = await mkdtemp(join(tmpdir(), "publisher-test-"));
   directories.push(directory);
-  return join(directory, "application.sqlite");
+  const path = join(directory, "application.sqlite");
+  if (prepared) migrateApplication(path);
+  return path;
 }
 
 afterEach(async () => {
@@ -39,6 +42,36 @@ test("an isolated publisher serves health using its temporary database", async (
   const response = await fetch(new URL("/health", publisher.url));
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ status: "ok" });
+});
+
+test("publisher startup requires explicit application migration before serving signed reads", async () => {
+  const databasePath = await temporaryDatabase(false);
+  // The initial application migration is pending. Neither attempt may apply it.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    expect(() => {
+      const publisher = startPublisher({ port: 0, databasePath });
+      publishers.push(publisher);
+    }).toThrow("Application database is not prepared");
+  }
+
+  const migration = Bun.spawn([process.execPath, new URL("./db/migrate.ts", import.meta.url).pathname], {
+    env: { ...process.env, DATABASE_PATH: databasePath }, stdout: "pipe", stderr: "pipe",
+  });
+  expect(await migration.exited).toBe(0);
+  expect(await new Response(migration.stderr).text()).toBe("");
+
+  const publisher = startPublisher({ port: 0, databasePath });
+  publishers.push(publisher);
+  const { restoreReader, signArticleRequest } = await import("@stateless-reader/core");
+  const { seed } = await restoreReader("abandon ".repeat(11) + "about");
+  const path = "/article/the-quiet-web";
+  const response = await fetch(new URL(path, publisher.url), { headers: {
+    authorization: signArticleRequest(seed, {
+      articleId: "the-quiet-web", method: "GET", path, timestamp: Math.floor(Date.now() / 1000),
+    }),
+  } });
+  expect(response.status).toBe(402);
+  expect((await response.json() as PaymentRequiredResponse).offer.amount).toBe(21);
 });
 
 test("importing the entry point neither starts a listener nor installs signal handlers", async () => {

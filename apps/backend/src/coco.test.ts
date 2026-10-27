@@ -3,12 +3,14 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { restoreReader, deriveArticleKey, signArticleRequest } from '@stateless-reader/core';
 import { startFakeMint } from '../tests/fake-mint';
 import { startPublisher } from './app';
+import { migrateApplication } from './db/migrate';
 import { openCocoSettlement } from './coco';
 
 test.each([false, true])('real Coco settles, retains funds, and restarts (inactive inputs: %s)', async (inactiveInput) => {
   const dir = await mkdtemp('/tmp/real-coco-');
   const mint = startFakeMint({ inactiveInput });
   let settlement = await openCocoSettlement({ databasePath: `${dir}/coco.sqlite`, mint: mint.url, seed: new Uint8Array(64).fill(42) });
+  migrateApplication(`${dir}/grants.sqlite`);
   let publisher = startPublisher({ port: 0, databasePath: `${dir}/grants.sqlite`, mint: mint.url, settlement });
   try {
     const { seed } = await restoreReader('abandon '.repeat(11) + 'about');
@@ -41,6 +43,7 @@ test.each(['fee', 'unknown-keyset', 'denomination', 'signature', 'dleq', 'spent'
     const dir = await mkdtemp('/tmp/coco-rejection-');
     const mint = startFakeMint({ fee: scenario === 'fee' ? 100 : 0 });
     const settlement = await openCocoSettlement({ databasePath: `${dir}/coco.sqlite`, mint: mint.url, seed: new Uint8Array(64).fill(42) });
+    migrateApplication(`${dir}/grants.sqlite`);
     const publisher = startPublisher({ port: 0, databasePath: `${dir}/grants.sqlite`, mint: mint.url, settlement });
     try {
       const { seed } = await restoreReader('abandon '.repeat(11) + 'about');

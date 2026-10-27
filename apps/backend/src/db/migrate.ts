@@ -1,6 +1,15 @@
 import { openDatabase } from "./index";
+import { migrate } from "drizzle-orm/bun-sqlite/migrator";
+import { migrationsFolder } from "../migration-path";
 
-// Opening applies only application-owned migrations; Coco migrates its own file.
-const database = openDatabase();
-try { console.log("Database migrations applied."); }
-finally { database.close(); }
+/** Explicit application preparation. Coco migrates its own separate file. */
+export function migrateApplication(path?: string) {
+  const database = openDatabase(path);
+  try { migrate(database.db, { migrationsFolder }); }
+  finally { database.close(); }
+}
+
+if (import.meta.main) {
+  migrateApplication();
+  console.log("Database migrations applied.");
+}

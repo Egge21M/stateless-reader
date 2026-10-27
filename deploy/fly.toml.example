@@ -39,3 +39,6 @@ kill_timeout = "300s"
 
 # Exactly one Machine/process. Deploy with --ha=false; never scale out.
 # No release_command: Fly release Machines do not mount application volumes.
+# Before first start or a schema update, use fly.migrate.toml.example on this
+# same app/volume, run dist/migrate.js explicitly, then deploy this server config.
+# See docs/demo/live-wallet.md. Never migrate concurrently with the publisher.
