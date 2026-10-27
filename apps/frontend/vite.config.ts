@@ -11,6 +11,7 @@ export default defineConfig({
       // The default workspace-wide allowlist would expose publisher fixtures.
       allow: [
         import.meta.dirname,
+        resolve(import.meta.dirname, "../../packages/core/src"),
         resolve(import.meta.dirname, "../../node_modules"),
       ],
       deny: [
@@ -24,7 +25,7 @@ export default defineConfig({
       ],
     },
     proxy: {
-      "/articles": process.env.PUBLISHER_ORIGIN ?? "http://127.0.0.1:3000",
+      "/article": process.env.PUBLISHER_ORIGIN ?? "http://127.0.0.1:3000",
     },
   },
   resolve: {

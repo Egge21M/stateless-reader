@@ -1,0 +1,24 @@
+{
+  "phrase": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+  "seed": "5eb00bbddcf069084889a8ab9155568165f5c453ccb85e70811aaed6f6da5fc19a5ac40b389cd370d086206dec8aa6c43daea6690f20ad3d8d48b2d2ce9e38e4",
+  "vectors": [
+    {
+      "articleId": "the-quiet-web",
+      "privateKey": "3e9d5d05b835a34af0cf8943d4f03aaa13373ae2c2a4611384b9edd4b0ec9e42",
+      "publicKey": "360fc8d6daaa8ef054dbd8a3721cd3237f863dc9b9cc87f6df596abdfdde8dfb",
+      "timestamp": 1793102400,
+      "message": "[\"stateless-reader/request/v1\",\"the-quiet-web\",\"360fc8d6daaa8ef054dbd8a3721cd3237f863dc9b9cc87f6df596abdfdde8dfb\",\"GET\",\"/article/the-quiet-web\",\"1793102400\"]",
+      "signature": "9751e8732a45ebcf5392c269af493eec4e4dfd6e586a1ff42ca6759ce1219dcd0c87d57f55f7a1a75c3f0dd3008586007e0e46148278129fa3010c4ca6bd9409",
+      "authorization": "Reader-v1 360fc8d6daaa8ef054dbd8a3721cd3237f863dc9b9cc87f6df596abdfdde8dfb.1793102400.9751e8732a45ebcf5392c269af493eec4e4dfd6e586a1ff42ca6759ce1219dcd0c87d57f55f7a1a75c3f0dd3008586007e0e46148278129fa3010c4ca6bd9409"
+    },
+    {
+      "articleId": "a-library-in-your-pocket",
+      "privateKey": "c15d7f38a22ebe7d09af0766f5339a61c1a235d7b95e63cc51103712ed878e93",
+      "publicKey": "0d174f330614021cad5085b2325d6fabb9a0d0fe18ffe5c6663fc0ade32efbc3",
+      "timestamp": 1793102400,
+      "message": "[\"stateless-reader/request/v1\",\"a-library-in-your-pocket\",\"0d174f330614021cad5085b2325d6fabb9a0d0fe18ffe5c6663fc0ade32efbc3\",\"GET\",\"/article/a-library-in-your-pocket\",\"1793102400\"]",
+      "signature": "e744695b44ea35d67a443496c9c390d896407ec53f882a05161e41c4fff0f803b8e3404fc87edb6eefb838b3e44b304460b4bfb5f610a419b80777a4acba4a0d",
+      "authorization": "Reader-v1 0d174f330614021cad5085b2325d6fabb9a0d0fe18ffe5c6663fc0ade32efbc3.1793102400.e744695b44ea35d67a443496c9c390d896407ec53f882a05161e41c4fff0f803b8e3404fc87edb6eefb838b3e44b304460b4bfb5f610a419b80777a4acba4a0d"
+    }
+  ]
+}
