@@ -47,7 +47,7 @@ test("one passkey entry restores the vector without an account, storage, or iden
   const traffic: string[] = [];
   context.on("request", r => traffic.push(r.url(), JSON.stringify(r.headers()), r.postData() ?? ""));
   await profile(page);
-  await expect(page.getByRole("button", { name: "First time? Create a reader", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "First time? Create a reader", exact: true })).toBeVisible();
   await expect(page.getByRole("textbox")).toHaveCount(0);
   await page.getByRole("button", { name: "Login with passkey", exact: true }).click();
   await expect(page.getByText("Reader unlocked", { exact: true })).toBeVisible();
@@ -80,19 +80,15 @@ for (const mode of ["cancel", "unsupported", "short"] as const) {
   });
 }
 
-test("explicit creation evaluates PRF on the created credential when the provider requires a second prompt", async ({ page }) => {
+test("first-time creation works without a login attempt and evaluates PRF on the created credential", async ({ page }) => {
   await mockPasskey(page, "create");
   await profile(page);
-  await page.getByRole("button", { name: "Login with passkey", exact: true }).click();
   await page.getByRole("button", { name: "First time? Create a reader", exact: true }).click();
   await expect(page.getByText("Reader unlocked", { exact: true })).toBeVisible();
   const calls = await page.evaluate(() => (window as unknown as { passkeyCalls: { operation: string; allowed: number; input: string; challenge: string }[] }).passkeyCalls);
-  expect(calls.map(c => c.operation)).toEqual(["get", "create", "get"]);
-  expect(calls[0].allowed).toBe(0);
-  expect(calls[2].allowed).toBe(1);
-  expect(calls[0].input).toBe("stateless-reader/passkey/v2");
-  expect(calls[2].input).toBe(calls[0].input);
-  expect(calls[2].challenge).not.toBe(calls[0].challenge);
+  expect(calls.map(c => c.operation)).toEqual(["create", "get"]);
+  expect(calls[1].allowed).toBe(1);
+  expect(calls[1].input).toBe("stateless-reader/passkey/v2");
 });
 
 for (const action of ["dismiss", "cancel", "retry"] as const) {
@@ -119,18 +115,8 @@ test("native WebAuthn PRF creates and rediscovers a paid reader after lock and r
     protocol: "ctap2", ctap2Version: "ctap2_1", transport: "internal", hasResidentKey: true,
     hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true, hasPrf: true,
   } });
-  // Simulate cancellation of the first discovery prompt; creation and all later
-  // assertions use the native browser API and virtual authenticator unchanged.
+  // First visit: create directly, without a failed discovery ceremony.
   await profile(page, "http://localhost:4173");
-  await page.evaluate(() => {
-    const native = navigator.credentials.get.bind(navigator.credentials);
-    let first = true;
-    navigator.credentials.get = options => {
-      if (first) { first = false; return Promise.reject(new DOMException("Cancelled", "NotAllowedError")); }
-      return native(options);
-    };
-  });
-  await page.getByRole("button", { name: "Login with passkey", exact: true }).click();
   await page.getByRole("button", { name: "First time? Create a reader", exact: true }).click();
   await expect(page.getByText("Reader unlocked", { exact: true })).toBeVisible();
   await selectArticle(page, "The quiet web");

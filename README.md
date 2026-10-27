@@ -13,8 +13,8 @@ The live external-wallet demonstration remains unverified. See the
 ## Returning to purchases
 
 Open **Profile → Login with passkey**. Your device or password manager offers
-existing credentials and may offer another device. If that fails or you cancel,
-**First time? Create a reader** explicitly creates a passkey for a new reader. A new
+existing credentials and may offer another device. New readers can immediately
+choose the **First time? Create a reader** link below it to create a passkey. A new
 passkey does not recover another reader's purchases. The browser/provider must
 support WebAuthn PRF; unsupported credentials leave the reader locked.
 

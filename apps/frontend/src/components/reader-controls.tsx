@@ -28,24 +28,18 @@ export function ReaderControls({
           >
             Login with passkey
           </Button>
-        </div>
-      )}
-      {reader.error && <FieldError>{reader.error}</FieldError>}
-      {reader.error && (
-        <div className="flex flex-col items-start gap-3">
-          <p className="text-sm text-muted-foreground">
-            Creating a reader starts fresh. To return to previous purchases,
-            use your existing passkey.
-          </p>
           <Button
             variant="link"
             size="sm"
+            className="self-start"
+            disabled={reader.pending}
             onClick={() => void reader.passkey(true)}
           >
             First time? Create a reader
           </Button>
         </div>
       )}
+      {reader.error && <FieldError>{reader.error}</FieldError>}
       <p className="text-sm text-muted-foreground">
         Your passkey is your only way back to your purchases. Keep it available
         in your passkey provider. There is no recovery phrase or publisher
