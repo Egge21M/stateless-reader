@@ -155,20 +155,26 @@ for (const action of ["lock", "restore", "select another", "clear selection"] as
     const pending = new Promise<void>((resolve) => { release = resolve; });
     const requested = new Promise<void>((resolve) => { received = resolve; });
     const completed = new Promise<void>((resolve) => { finished = resolve; });
-    // Delay a real publisher 402 at the HTTP boundary, not a fabricated service result.
+    // Hold every request from the original reader, including StrictMode's replay.
+    // A one-use route can be consumed by an aborted development request before
+    // its handler runs. Replacement readers must still reach the real publisher.
+    let delayedKey: string | undefined;
     await page.route("**/article/the-quiet-web", async (route) => {
+      const key = route.request().headers().authorization?.split(" ")[1]?.split(".")[0];
+      delayedKey ??= key;
+      if (key !== delayedKey) { await route.continue(); return; }
       const response = await route.fetch();
       received();
       await pending;
       try { await route.fulfill({ response }); } finally { finished(); }
-    }, { times: 1 });
+    });
     await page.goto("/");
     await openProfile(page);
     await page.getByLabel("Restore reader recovery phrase", { exact: true }).fill(phrase);
     await page.getByRole("button", { name: "Restore reader", exact: true }).click();
     await expect(page.getByText("Reader unlocked", { exact: true })).toBeVisible();
     await selectArticle(page, "The quiet web");
-    await requested;
+    await test.step("publisher response reaches the delay", () => requested);
     const payment = page.getByLabel("Payment request", { exact: true });
     let replacement: string | undefined;
     try {
@@ -198,7 +204,7 @@ for (const action of ["lock", "restore", "select another", "clear selection"] as
           .not.toContain("360fc8d6daaa8ef054dbd8a3721cd3237f863dc9b9cc87f6df596abdfdde8dfb");
       }
     } finally { release(); }
-    await completed;
+    await test.step("delayed response is released", () => completed);
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     if (replacement) await expect(payment).toHaveValue(replacement);
     else await expect(payment).toHaveCount(0);
