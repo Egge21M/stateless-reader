@@ -7,6 +7,15 @@ import { startPublisher } from "./app";
 const publishers: ReturnType<typeof startPublisher>[] = [];
 const directories: string[] = [];
 
+interface CatalogueResponse {
+  articles: {
+    id: string;
+    title: string;
+    preview: string;
+    offer: { amount: number; unit: string; mint: string };
+  }[];
+}
+
 async function temporaryDatabase() {
   const directory = await mkdtemp(join(tmpdir(), "publisher-test-"));
   directories.push(directory);
@@ -65,6 +74,76 @@ test("unknown routes retain the JSON not-found response", async () => {
   const response = await fetch(new URL("/missing", publisher.url));
   expect(response.status).toBe(404);
   expect(await response.json()).toEqual({ error: "Not found" });
+});
+
+test("readers can browse stable article metadata and fixed sat offers without authentication", async () => {
+  const publisher = startPublisher({ port: 0, databasePath: await temporaryDatabase() });
+  publishers.push(publisher);
+
+  const response = await fetch(new URL("/articles", publisher.url));
+  expect(response.status).toBe(200);
+  const catalogue = await response.json() as CatalogueResponse;
+  expect(catalogue.articles.length).toBeGreaterThanOrEqual(5);
+  expect(catalogue.articles.length).toBeLessThanOrEqual(10);
+  expect(new Set(catalogue.articles.map((article) => article.id)).size)
+    .toBe(catalogue.articles.length);
+  for (const article of catalogue.articles) {
+    // This allowlist is the public disclosure contract, including nested offer fields.
+    expect(Object.keys(article).sort()).toEqual(["id", "offer", "preview", "title"]);
+    expect(article.id).toMatch(/^[a-z0-9-]+$/);
+    expect(article.title.length).toBeGreaterThan(0);
+    expect(article.preview.length).toBeGreaterThan(0);
+    expect(Object.keys(article.offer).sort()).toEqual(["amount", "mint", "unit"]);
+    expect(article.offer.unit).toBe("sat");
+    expect(article.offer.mint).toBe("https://mint.minibits.cash/Bitcoin");
+    expect(Number.isSafeInteger(article.offer.amount)).toBe(true);
+    expect(article.offer.amount).toBeGreaterThan(0);
+  }
+  expect(catalogue.articles[0]).toEqual({
+    id: "the-quiet-web",
+    title: "The quiet web",
+    preview: "What happens when we build places to read, instead of places to scroll?",
+    offer: { amount: 21, unit: "sat", mint: "https://mint.minibits.cash/Bitcoin" },
+  });
+
+  await publisher.stop();
+  const restarted = startPublisher({ port: 0, databasePath: await temporaryDatabase() });
+  publishers.push(restarted);
+  const afterRestart = await fetch(new URL("/articles", restarted.url));
+  expect(await afterRestart.json()).toEqual(catalogue);
+});
+
+test("public browsing and direct unauthenticated requests never disclose premium bodies", async () => {
+  const publisher = startPublisher({ port: 0, databasePath: await temporaryDatabase() });
+  publishers.push(publisher);
+  const response = await fetch(new URL("/articles", publisher.url));
+  const catalogueText = await response.text();
+  const { articles } = JSON.parse(catalogueText) as CatalogueResponse;
+  const privatePassages = [
+    "A quiet website begins with a stopping point.",
+    "The most useful library is not the largest one.",
+    "One page can be the right unit of exchange.",
+    "At a repair table, the first tool is a question:",
+    "The slow train reveals the seams between places.",
+    "An exit is part of a product.",
+  ];
+  for (const passage of privatePassages) expect(catalogueText).not.toContain(passage);
+
+  for (const article of articles) {
+    const unauthenticated = await fetch(new URL(`/article/${article.id}`, publisher.url));
+    expect(unauthenticated.status).toBe(401);
+    expect(await unauthenticated.json()).toEqual({ error: "Article authorization required" });
+    const invalid = await fetch(new URL(`/article/${article.id}`, publisher.url), {
+      headers: { Authorization: "Bearer not-an-article-signature" },
+    });
+    expect(invalid.status).toBe(401);
+    expect(await invalid.json()).toEqual({ error: "Article authorization required" });
+  }
+  for (const path of ["/article/not-an-article", "/articles/the-quiet-web", "/fixtures", "/articles.json", "/src/articles.ts"]) {
+    const missing = await fetch(new URL(path, publisher.url));
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toEqual({ error: "Not found" });
+  }
 });
 
 test("publishers stop independently and release their ports for restart", async () => {

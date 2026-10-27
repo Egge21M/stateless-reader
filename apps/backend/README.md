@@ -15,6 +15,22 @@ curl http://127.0.0.1:3000/health
 `GET /health` queries SQLite through Drizzle and returns `{"status":"ok"}`.
 Unknown routes return JSON with HTTP 404.
 
+## Public article catalogue
+
+`GET /articles` returns `{ "articles": [...] }`. Each listing contains only
+`id`, `title`, `preview`, and `offer: { amount, unit, mint }`. Six fixture articles
+have fixed positive prices in `sat` at `https://mint.minibits.cash/Bitcoin`.
+`src/articles.ts` is publisher-only: full bodies must never be imported into the
+frontend or shared package, served as static files, or spread into public JSON.
+The catalogue explicitly selects its public fields.
+
+Article identifiers and offers are permanent. Correct a body under its existing
+identifier; create a new identifier for unrelated content. Do not recycle IDs.
+`GET /article/:articleId` currently returns JSON 401 for a known article and 404
+for an unknown article. All full content is denied until the subsequent signing
+and access-grant tickets implement authorization. There is no public fixture
+endpoint or payment behavior in this catalogue slice.
+
 ## Configuration
 
 Optionally copy `.env.example` to `.env` in this directory. Bun loads it
