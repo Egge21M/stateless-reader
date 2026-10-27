@@ -372,8 +372,15 @@ not Coco `wallet.restore()` or a mint scan.
   signature: 401 without content. Valid unpaid signature: 402 offer. Keep client
   and publisher clocks synchronized; replay inside the inclusive 60-second window
   is intentionally accepted.
-- Malformed/wrong mint/unit/underpaid payload: 400, before redemption. Wrong
-  content type: 415. Oversized body: 413. An already-granted pair: 409 before
+- Malformed/wrong mint/unit/underpaid payload: 400, before redemption. Send raw
+  NUT-18 JSON with `Content-Type: application/json`. Missing Content-Type and
+  URLSession's `application/x-www-form-urlencoded` default are tolerated for
+  the same JSON bytes; actual URL-encoded form data is rejected with 400
+  `Invalid payment JSON`. Other explicit media types (including `text/plain`)
+  return 415 `Unsupported payment Content-Type; send application/json`.
+  See [Macadamia compatibility evidence](../evidence/issue-7/macadamia-content-type.md);
+  this local fix is not a confirmed live wallet purchase.
+  Oversized body: 413, including streamed bodies. An already-granted pair: 409 before
   another redemption (malformed payloads can fail validation first).
 - Invalid/spent/unredeemable proofs or unsuccessful settlement: 422 without a
   grant. Unsupported fees/unavailable settlement/draining: 503. A timeout or
