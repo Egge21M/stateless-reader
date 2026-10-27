@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { decodePaymentRequest } from "@cashu/cashu-ts";
-import { openProfile, closeProfile, selectArticle } from "./reader-journey";
-import vector from "../../packages/core/test-vectors/passkey-v1.json" with { type: "json" };
+import { openProfile, unlockReader, closeProfile, selectArticle } from "./reader-journey";
+import vector from "../../packages/core/test-vectors/passkey-v2.json" with { type: "json" };
 
 test.use({ trace: "off" });
 
@@ -48,11 +48,10 @@ test("one passkey entry restores the vector without an account, storage, or iden
   context.on("request", r => traffic.push(r.url(), JSON.stringify(r.headers()), r.postData() ?? ""));
   await profile(page);
   await expect(page.getByRole("button", { name: "Create a new reader", exact: true })).toHaveCount(0);
-  await expect(page.getByLabel("Restore reader recovery phrase", { exact: true })).toBeHidden();
+  await expect(page.getByRole("textbox")).toHaveCount(0);
   await page.getByRole("button", { name: "Continue with passkey", exact: true }).click();
   await expect(page.getByText("Reader unlocked", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Show backup", exact: true }).click();
-  await expect(page.getByLabel("Your reader recovery phrase", { exact: true })).toHaveValue(vector.phrase);
+  await expect(page.getByRole("textbox")).toHaveCount(0);
   const result = page.waitForResponse(r => new URL(r.url()).pathname === "/article/the-quiet-web");
   await selectArticle(page, "The quiet web");
   expect((await (await result).json()).publicKey).toBe(vector.publicKey);
@@ -61,12 +60,11 @@ test("one passkey entry restores the vector without an account, storage, or iden
   await expect(page.getByText("Reader locked", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Continue with passkey", exact: true }).click();
   await expect(page.getByText("Reader unlocked", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Show backup", exact: true }).click();
-  await expect(page.getByLabel("Your reader recovery phrase", { exact: true })).toHaveValue(vector.phrase);
+  await expect(page.getByRole("textbox")).toHaveCount(0);
   expect(await page.evaluate(async () => ({ local: localStorage.length, session: sessionStorage.length,
     databases: await indexedDB.databases(), caches: await caches.keys() }))).toEqual({ local: 0, session: 0, databases: [], caches: [] });
   expect(await context.cookies()).toEqual([]);
-  for (const secret of [vector.phrase, vector.seed, vector.prf]) expect(traffic.join("\n")).not.toContain(secret);
+  for (const secret of [vector.seed, vector.prf]) expect(traffic.join("\n")).not.toContain(secret);
   expect(traffic.some(s => /\/login|\/register|\/credential/.test(s))).toBe(false);
 });
 
@@ -87,40 +85,34 @@ test("explicit creation evaluates PRF on the created credential when the provide
   await profile(page);
   await page.getByRole("button", { name: "Continue with passkey", exact: true }).click();
   await page.getByRole("button", { name: "Create a new reader", exact: true }).click();
-  await expect(page.getByLabel("Your reader recovery phrase", { exact: true })).toHaveValue(vector.phrase);
+  await expect(page.getByText("Reader unlocked", { exact: true })).toBeVisible();
   const calls = await page.evaluate(() => (window as unknown as { passkeyCalls: { operation: string; allowed: number; input: string; challenge: string }[] }).passkeyCalls);
   expect(calls.map(c => c.operation)).toEqual(["get", "create", "get"]);
   expect(calls[0].allowed).toBe(0);
   expect(calls[2].allowed).toBe(1);
-  expect(calls[0].input).toBe("stateless-reader/passkey/v1");
+  expect(calls[0].input).toBe("stateless-reader/passkey/v2");
   expect(calls[2].input).toBe(calls[0].input);
   expect(calls[2].challenge).not.toBe(calls[0].challenge);
 });
 
-for (const action of ["dismiss", "lock", "replace"] as const) {
+for (const action of ["dismiss", "cancel", "retry"] as const) {
   test(`a late passkey result cannot revive a reader after ${action}`, async ({ page }) => {
     await mockPasskey(page, "delayed");
     await profile(page);
     await page.getByRole("button", { name: "Continue with passkey", exact: true }).click();
     await expect(page.getByText("Unlocking reader…", { exact: true })).toBeVisible();
     if (action === "dismiss") await page.keyboard.press("Escape");
-    if (action === "lock") await page.getByRole("button", { name: "Lock reader", exact: true }).click();
-    if (action === "replace") {
-      await page.getByText("Use a recovery phrase", { exact: true }).click();
-      await page.getByLabel("Restore reader recovery phrase", { exact: true }).fill("invalid phrase");
-      await page.getByRole("button", { name: "Restore reader", exact: true }).click();
-      await expect(page.getByRole("alert")).toContainText("Invalid reader recovery phrase");
-    }
+    if (action !== "dismiss") await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    if (action === "retry") await unlockReader(page, [...Buffer.from(vector.prf, "hex")]);
     expect(await page.evaluate(() => (window as unknown as { passkeySignal: AbortSignal }).passkeySignal.aborted)).toBe(true);
     await page.evaluate(() => (window as unknown as { finishPasskey: () => void }).finishPasskey());
     await page.waitForTimeout(300);
     if (action === "dismiss") await page.getByRole("button", { name: "Profile", exact: true }).click();
-    await expect(page.getByText("Reader locked", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Show backup", exact: true })).toHaveCount(0);
+    await expect(page.getByText(action === "retry" ? "Reader unlocked" : "Reader locked", { exact: true })).toBeVisible();
   });
 }
 
-test("native WebAuthn PRF creates, rediscovers, and recovers a paid reader with its phrase in a fresh browser", async ({ page, context, browser, request }) => {
+test("native WebAuthn PRF creates and rediscovers a paid reader after lock and reload", async ({ page, context, request }) => {
   const cdp = await context.newCDPSession(page);
   await cdp.send("WebAuthn.enable");
   await cdp.send("WebAuthn.addVirtualAuthenticator", { options: {
@@ -140,10 +132,7 @@ test("native WebAuthn PRF creates, rediscovers, and recovers a paid reader with 
   });
   await page.getByRole("button", { name: "Continue with passkey", exact: true }).click();
   await page.getByRole("button", { name: "Create a new reader", exact: true }).click();
-  const backup = page.getByLabel("Your reader recovery phrase", { exact: true });
-  await expect(backup).toBeVisible();
-  const phrase = await backup.inputValue();
-  await page.getByRole("button", { name: "Hide backup" }).click();
+  await expect(page.getByText("Reader unlocked", { exact: true })).toBeVisible();
   await selectArticle(page, "The quiet web");
   const encoded = page.getByLabel("Payment request", { exact: true });
   await expect(encoded).toBeVisible();
@@ -155,8 +144,6 @@ test("native WebAuthn PRF creates, rediscovers, and recovers a paid reader with 
   await page.getByRole("button", { name: "Lock reader", exact: true }).click();
   await page.getByRole("button", { name: "Continue with passkey", exact: true }).click();
   await expect(page.getByText("Reader unlocked", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Show backup", exact: true }).click();
-  expect(await backup.inputValue() === phrase, "Same native credential recovers the same phrase").toBe(true);
   await closeProfile(page);
   await expect(page.getByRole("article")).toContainText("A quiet website begins with a stopping point.");
   await page.reload();
@@ -164,17 +151,6 @@ test("native WebAuthn PRF creates, rediscovers, and recovers a paid reader with 
   await expect(page.getByText("Reader locked", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Continue with passkey", exact: true }).click();
   await expect(page.getByText("Reader unlocked", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Show backup", exact: true }).click();
-  expect(await backup.inputValue() === phrase, "Rediscovery after reload requires no stored ID").toBe(true);
-  const fresh = await browser.newContext();
-  try {
-    const restored = await fresh.newPage();
-    await restored.goto("/");
-    await openProfile(restored);
-    await restored.getByLabel("Restore reader recovery phrase", { exact: true }).fill(phrase);
-    await restored.getByRole("button", { name: "Restore reader", exact: true }).click();
-    await expect(restored.getByText("Reader unlocked", { exact: true })).toBeVisible();
-    await selectArticle(restored, "The quiet web");
-    await expect(restored.getByRole("article")).toContainText("A quiet website begins with a stopping point.");
-  } finally { await fresh.close(); }
+  await selectArticle(page, "The quiet web");
+  await expect(page.getByRole("article")).toContainText("A quiet website begins with a stopping point.");
 });

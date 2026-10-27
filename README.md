@@ -1,70 +1,51 @@
 # Stateless Reader
 
 An accountless premium web reader proof of concept: readers buy individual
-articles with Cashu and regain access using a passkey or a reader-owned
-12-word recovery phrase. Article-specific keys avoid a shared cryptographic identifier across
-different articles, while the publisher retains access grants and its Cashu
-wallet state.
-
-The planned demo serves 5–10 articles from one publisher, uses regular Cashu
-payment requests with HTTP transport, and delegates backend Cashu operations
-to Coco. The defining demonstration is buying an article, then restoring access
-in a fresh browser using only the recovery phrase, without paying again.
+articles with Cashu and return using a passkey. Article-specific keys avoid a
+shared cryptographic identifier across different articles, while the publisher
+retains access grants and its Cashu wallet state.
 
 The publisher and frontend implement the deterministic purchase and reader flow.
 The live external-wallet demonstration remains unverified. See the
-[HTTPS demo runbook](docs/demo/live-wallet.md) and
-[validation evidence](docs/evidence/issue-7/README.md), the
-[glossary](GLOSSARY.md), [access-model decision](docs/adr/0001-accountless-article-access.md),
-and [request-authentication decision](docs/adr/0002-short-lived-signed-article-requests.md)
-for the agreed scope and privacy boundaries.
+[HTTPS demo runbook](docs/demo/live-wallet.md), [validation evidence](docs/evidence/issue-7/README.md),
+[glossary](GLOSSARY.md), and [passkey-only decision](docs/adr/0004-passkey-only-readers.md).
 
-## Recovering purchases
+## Returning to purchases
 
-Open **Profile** and choose **Continue with passkey**. Your device or password
-manager offers existing passkeys and may offer another device. If that fails or
-you cancel, **Create a new reader** explicitly creates a passkey for a new reader.
-A new passkey does not recover purchases from an old passkey or phrase. Passkeys
-must support WebAuthn PRF; unsupported providers leave the reader locked.
+Open **Profile → Continue with passkey**. Your device or password manager offers
+existing credentials and may offer another device. If that fails or you cancel,
+**Create a new reader** explicitly creates a passkey for a new reader. A new
+passkey does not recover another reader's purchases. The browser/provider must
+support WebAuthn PRF; unsupported credentials leave the reader locked.
 
-Back up the twelve-word phrase shown after creation privately before paying.
-**Show backup** reveals it again later. It recovers the same reader independently
-of the passkey. **Use a recovery phrase** also offers the original phrase-only
-creation and restoration flow. Never import a wallet's phrase here.
+Reader seeds are derived directly from the passkey secret using HKDF. There is
+no recovery phrase, import/export or publisher reset. Keep the same credential
+available through your passkey provider. Sync and cross-device PRF behavior
+must be verified with the devices/providers you intend to use. Passkeys are tied
+to the site's hostname; losing access to the credential or its PRF output loses
+access to purchases. Sharing the credential shares access.
+
 Use a separate Cashu wallet to pay the article's request. Each article has its
-own derived key and purchase: buying one does not unlock another.
+own derived key and purchase. Returning with the same passkey recreates those
+keys without paying again. Access is checked only when an article is opened;
+there is no catalogue scan or purchase history. Grants cover corrections and
+updates under the same article identity; publishers must never reuse an ID for
+unrelated content.
 
-To return, choose **Continue with passkey** and select the same credential, or
-expand **Use a recovery phrase**, enter the same twelve words in **Restore reader
-recovery phrase**, choose **Restore reader**, then open a purchased article.
-Repeat for the second purchase; neither requires another payment. Restoration
-does not scan the catalogue or produce a purchase history. Access is checked
-only for the article you open. Existing grants allow repeated reads without
-expiry while the publisher offers the article, including corrections and updates
-under its original identity. Publishers must never reuse an ID for unrelated
-content.
+The app retains seeds and article private keys only in tab memory. **Lock reader**
+and reload clear active application state. Pending operations are aborted and
+stale results discarded. No credential ID, seed or recovery blob is stored by
+the app. The passkey provider stores the credential and may sync it. JavaScript
+cannot guarantee erasure of every memory copy.
 
-The phrase, reader seed and article private keys stay in tab memory. **Lock
-reader** clears active application state, and reloading leaves the reader locked;
-the app saves no credential ID, seed, or recovery blob. The passkey provider
-stores the credential and may sync it. Unlock with the same passkey or restore
-the phrase again to read. JavaScript cannot guarantee erasure of every memory
-copy. Losing both passkey and phrase loses access; sharing either shares access.
-Passkeys are tied to the site's hostname. Keep the phrase for domain changes
-or providers that cannot reproduce the same PRF secret on another device.
-See [passkey recovery v1](docs/protocol/passkey-reader-v1.md) for the frozen
-derivation and compatibility limits.
-There is no publisher-assisted password reset. Do not enter your Cashu wallet
-phrase in the reader.
+[Passkey derivation v2](docs/protocol/passkey-reader-v2.md) intentionally replaces
+the earlier phrase-compatible derivation. Previous reader keys and purchases
+are not migrated in this POC. The publisher's data and wallet are retained.
 
-Recovery also requires the publisher's retained grants and available articles.
-A reader phrase cannot reconstruct a lost publisher database. For a normal
-publisher restart, stop gracefully with SIGINT/SIGTERM and await completion,
-then start with the same application database, separate Coco database and stable
-publisher seed. Back up those files after shutdown and protect the seed; see
-the [backend configuration](apps/backend/README.md). Reopening those files
-preserves grants and Coco-managed spendable funds. It does not run a reader
-purchase scan or require a new payment.
+Recovery still requires the publisher's grants and available articles. For a
+normal publisher restart, stop gracefully with SIGINT/SIGTERM, await completion,
+and restart with the same application database, separate Coco database and
+stable publisher seed. See [backend configuration](apps/backend/README.md).
 
 Payment settlement and grant storage are not atomic. A crash after the mint
 swap but before the grant is stored can leave a paid reader without access;

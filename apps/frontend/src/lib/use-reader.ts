@@ -1,10 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { PasskeyError, unlockPasskey } from "./passkey"
-import {
-  generateReaderPhrase,
-  restoreReader,
-  type ReaderIdentity,
-} from "@stateless-reader/core"
+import type { ReaderIdentity } from "@stateless-reader/core"
 
 export function useReader() {
   const active = useRef<ReaderIdentity | null>(null)
@@ -15,16 +11,7 @@ export function useReader() {
     revision: number
     pending: boolean
     error: string
-    backup: boolean
-    passkeyFailed: boolean
-  }>({
-    identity: null,
-    revision: 0,
-    pending: false,
-    error: "",
-    backup: false,
-    passkeyFailed: false,
-  })
+  }>({ identity: null, revision: 0, pending: false, error: "" })
 
   useEffect(
     () => () => {
@@ -42,61 +29,35 @@ export function useReader() {
     ceremony.current = null
     active.current?.seed.fill(0)
     active.current = null
-    setState({
-      identity: null,
-      revision,
-      pending: false,
-      error: "",
-      backup: false,
-      passkeyFailed: false,
-    })
+    setState({ identity: null, revision, pending: false, error: "" })
     return revision
   }
 
-  async function run(
-    load: (signal: AbortSignal) => Promise<ReaderIdentity>,
-    backup: boolean,
-    passkey: boolean
-  ) {
+  async function passkey(create = false) {
     const revision = clear()
     const controller = new AbortController()
     ceremony.current = controller
-    setState({
-      identity: null,
-      revision,
-      pending: true,
-      error: "",
-      backup: false,
-      passkeyFailed: false,
-    })
+    setState({ identity: null, revision, pending: true, error: "" })
     try {
-      const identity = await load(controller.signal)
+      const identity = await unlockPasskey(create, controller.signal)
       if (revision !== generation.current) {
         identity.seed.fill(0)
         return
       }
       active.current = identity
-      setState({
-        identity,
-        revision,
-        pending: false,
-        error: "",
-        backup,
-        passkeyFailed: false,
-      })
+      setState({ identity, revision, pending: false, error: "" })
     } catch (error) {
       if (revision === generation.current) {
         setState({
           identity: null,
           revision,
           pending: false,
-          error: passkey
-            ? error instanceof PasskeyError
+          error:
+            error instanceof PasskeyError
               ? error.message
-              : "Could not unlock with a passkey. Try again or use another device from the passkey prompt. If you are new here, create a new reader below."
-            : "Invalid reader recovery phrase. Enter twelve English BIP39 words with a valid checksum.",
-          backup: false,
-          passkeyFailed: passkey,
+              : create
+                ? "Passkey setup did not finish. If a passkey was saved, try Continue with passkey again."
+                : "Could not unlock with a passkey. Try again or use another device from the passkey prompt. If you are new here, create a new reader below.",
         })
       }
     } finally {
@@ -106,22 +67,12 @@ export function useReader() {
 
   return {
     ...state,
-    unlock: (phrase?: string) =>
-      run(
-        () => restoreReader(phrase ?? generateReaderPhrase()),
-        phrase === undefined,
-        false
-      ),
-    passkey: (create = false) =>
-      run((signal) => unlockPasskey(create, signal), create, true),
+    passkey,
     lock: clear,
     dismissProfile: () => {
-      // Use the synchronous identity ref: creation and dismissal can happen before
-      // React commits the pending state. Invalidate that work even in the same turn.
+      // Invalidate pending work even before React commits its state.
       if (!active.current) clear()
-      else setState((current) => ({ ...current, backup: false, error: "" }))
+      else setState((current) => ({ ...current, error: "" }))
     },
-    toggleBackup: () =>
-      setState((current) => ({ ...current, backup: !current.backup })),
   }
 }

@@ -1,6 +1,6 @@
 import { afterEach, expect, test, spyOn } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
-import { restoreReader, signArticleRequest, deriveArticleKey } from '@stateless-reader/core';
+import { readerFromPasskey, signArticleRequest, deriveArticleKey } from '@stateless-reader/core';
 import { startPublisher } from './app';
 import { migrateApplication } from './db/migrate';
 import type { Settlement } from './settlement';
@@ -13,7 +13,7 @@ afterEach(async () => {
 });
 const articleId = 'the-quiet-web';
 const mint = 'https://mint.minibits.cash/Bitcoin';
-const { seed } = await restoreReader('abandon '.repeat(11) + 'about');
+const { seed } = await readerFromPasskey(new Uint8Array(32).fill(1));
 const publicKey = deriveArticleKey(seed, articleId).publicKey;
 const paymentContentTypes = ['application/json', null, 'application/x-www-form-urlencoded'];
 const proof = (amount = 32, secret: string = crypto.randomUUID()) => ({
@@ -63,7 +63,7 @@ test('a settled payment unlocks only its signed article and reader key', async (
   expect(content.headers.get('cache-control')).toBe('no-store');
   expect((await content.json() as { body: string }).body).toContain('A quiet website begins with a stopping point.');
   expect((await read(publisher.url, 'a-library-in-your-pocket')).status).toBe(402);
-  const other = await restoreReader('legal winner thank year wave sausage worth useful legal winner thank yellow');
+  const other = await readerFromPasskey(new Uint8Array(32).fill(2));
   expect((await read(publisher.url, articleId, other.seed)).status).toBe(402);
   expect((await fetch(new URL(`/article/${articleId}`, publisher.url))).status).toBe(401);
 });

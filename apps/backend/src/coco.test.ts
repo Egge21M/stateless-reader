@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
-import { restoreReader, deriveArticleKey, signArticleRequest } from '@stateless-reader/core';
+import { readerFromPasskey, deriveArticleKey, signArticleRequest } from '@stateless-reader/core';
 import { startFakeMint } from '../tests/fake-mint';
 import { startPublisher } from './app';
 import { migrateApplication } from './db/migrate';
@@ -13,7 +13,7 @@ test.each([false, true])('real Coco settles, retains funds, and restarts (inacti
   migrateApplication(`${dir}/grants.sqlite`);
   let publisher = startPublisher({ port: 0, databasePath: `${dir}/grants.sqlite`, mint: mint.url, settlement });
   try {
-    const { seed } = await restoreReader('abandon '.repeat(11) + 'about');
+    const { seed } = await readerFromPasskey(new Uint8Array(32).fill(1));
     const publicKey = deriveArticleKey(seed, 'the-quiet-web').publicKey;
     const pay = await fetch(new URL(`/payment/the-quiet-web/${publicKey}`, publisher.url), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -46,7 +46,7 @@ test.each(['fee', 'unknown-keyset', 'denomination', 'signature', 'dleq', 'spent'
     migrateApplication(`${dir}/grants.sqlite`);
     const publisher = startPublisher({ port: 0, databasePath: `${dir}/grants.sqlite`, mint: mint.url, settlement });
     try {
-      const { seed } = await restoreReader('abandon '.repeat(11) + 'about');
+      const { seed } = await readerFromPasskey(new Uint8Array(32).fill(1));
       const publicKey = deriveArticleKey(seed, 'the-quiet-web').publicKey;
       const issued = mint.issue(32);
       const input = {

@@ -4,7 +4,7 @@ export class PasskeyError extends Error {}
 
 const unsupported = () =>
   new PasskeyError(
-    "This passkey or browser cannot unlock a reader. Try another supported browser or use your recovery phrase."
+    "This passkey or browser cannot unlock a reader. Try a compatible browser or passkey provider."
   )
 
 function extensions() {

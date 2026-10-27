@@ -1,6 +1,6 @@
 # Bind article purchases to reader-controlled article keys
 
-The reader creation and recovery entry is extended by [ADR 0003](0003-passkey-reader-recovery.md): a passkey may recreate the same reader seed as its exported recovery phrase. The remaining access, payment and persistence decisions below still apply.
+The reader creation and recovery mechanism below is superseded by [ADR 0004](0004-passkey-only-readers.md): readers now use only a passkey, with no phrase fallback. The remaining access, payment and persistence decisions below still apply.
 
 The proof of concept serves one publisher selling individual premium articles. Bind each purchase to a reader-controlled, deterministically derived article key instead of a publisher account. Keep a durable access grant for the article and public key, allowing repeat access without expiry while the article remains available. A reader must be able to regain access in a fresh browser using their seed without paying again; this also requires the publisher to retain the grant.
 

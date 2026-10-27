@@ -1,0 +1,5 @@
+# Derive reader seeds directly from passkeys
+
+Replace the phrase-based recovery decisions in ADR 0001 and [ADR 0003](0003-passkey-reader-recovery.md) with passkey-only reader creation and recovery. The POC does not require backward compatibility: derive the 64-byte reader seed directly from a 32-byte WebAuthn PRF result with HKDF-SHA256, without mnemonic encoding, PBKDF2, import/export, or a second recovery mechanism. Version this derivation as [passkey v2](../protocol/passkey-reader-v2.md), retaining article-key and signed-request v1 because their inputs and wire format are unchanged.
+
+Existing credentials produce different reader keys under v2, and previous purchases are not migrated. Retain publisher grants and wallet state rather than wiping data. A reader must retain access to the same credential and a provider/browser that reproduces its PRF output at the same RP hostname; neither a new passkey nor a publisher reset recovers lost access. The explicit-creation, cancellation and memory-only lifecycle rules from ADR 0003 remain in force.

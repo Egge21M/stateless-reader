@@ -47,7 +47,7 @@ One process must exclusively own **two separate durable SQLite files**:
   pinned Coco initializer applies its own migrations. Do not run Drizzle on this
   file or inspect/change wallet tables to establish a balance.
 - `PUBLISHER_SEED_HEX`: one stable private **64-byte** seed, encoded as **128 hex
-  characters**. It is unrelated to any reader phrase or payer-wallet seed. Missing
+  characters**. It is unrelated to any reader seed or payer-wallet seed. Missing
   or malformed seeds fail startup. A different but well-formed seed is not detected
   as a rotation: the operator must retain the same seed with the same Coco file.
 
@@ -235,7 +235,7 @@ Add the exact mint URL `https://mint.minibits.cash/Bitcoin` to the wallet before
 pasting/scanning a request; select **sat**. Obtain authorized real sat ecash there
 sufficient for both article prices (currently 21 + 34 = 55 sat for the first two),
 and any wallet-side funding/send costs. No funds have been supplied or spent.
-Reader recovery phrases and Cashu wallet phrases must remain separate.
+Reader passkeys are separate from the external Cashu wallet. Keep the reader passkey available in its provider; there is no phrase fallback.
 
 Immediately before paying, GET and retain only public metadata:
 
@@ -286,13 +286,14 @@ Record UTC time, publisher commit/image digest, wallet commit/build and origin,
 browser versions, HTTPS publisher origin, configured mint/unit, rechecked fees,
 and the results below. Keep only statuses, timings, amount totals and redacted
 article/key aliases. Do not save request bodies, Authorization headers, QR/text
-payloads, HAR files, wallet console logs, seeds or recovery phrases. In particular,
+payloads, HAR files, wallet console logs, seeds or passkey secrets. In particular,
 the pinned Cashu.me sender logs a token to its console. Do not export that console
 or record a screen showing it. Playwright traces are for disposable deterministic
-tests only; never run that trace configuration with a real wallet or reader phrase.
+tests only; never run that trace configuration with a real wallet or reader credential.
 
-1. Visit the public catalogue in browser A. Create a new reader phrase, privately
-   back up twelve words, then hide the phrase. Select **The quiet web** (21 sat).
+1. Visit the public catalogue in browser A. Use Profile → Continue with passkey,
+   then explicitly create a new reader if needed. Confirm the provider supports
+   repeat unlock at this hostname before paying. Select **The quiet web** (21 sat).
    A fresh signed GET must return 402 and open its QR/copyable request. Label its
    public key **A1** in the private operator notes; it is not a wallet credential.
 2. Scan or paste the request into the pinned, funded wallet. Confirm mint/unit,
@@ -304,10 +305,12 @@ tests only; never run that trace configuration with a real wallet or reader phra
    its different key **A2** and record `A1 != A2`. Pay its separate request once;
    observe a second POST 200 and polling-to-content. Do not pay a request twice.
 4. Lock or reload browser A; it must require restoration. In a **fresh browser B
-   or clean profile**, restore the same twelve words privately. Restoration must
+   or clean profile**, choose Continue with passkey and access the same credential
+   through its provider or other-device prompt. Confirm PRF compatibility; do not
+   create a new credential to recover existing purchases. Unlocking must
    not scan purchases. Open the two articles individually: both return 200 with
    the corresponding original key, with no wallet payment. A third unpurchased
-   article remains 402. Optionally verify a different generated phrase gets 402
+   article remains 402. Optionally verify a different passkey gets 402
    for the first article without paying.
 5. After all requests settle, close payment panels and stop Bun gracefully with
    SIGTERM/SIGINT. Wait for exit; preserve the two files and publisher seed. Take
@@ -363,7 +366,7 @@ then start one process. Verify health, balances and
 signed reads. Never run both the old and restored copies. An outdated wallet
 snapshot is not a guarantee of fund recovery or safe counter reuse. Publisher
 data loss, wallet disaster recovery, and paid-but-ungranted repair are not solved
-by the reader's phrase or this runbook. Normal restart is reopening retained state,
+by the reader's passkey or this runbook. Normal restart is reopening retained state,
 not Coco `wallet.restore()` or a mint scan.
 
 ## Expected failures and limits
@@ -397,10 +400,11 @@ not Coco `wallet.restore()` or a mint scan.
 - No publisher accounts, stored unpaid checkouts or common article key across
   different articles. Repeat reads of one article remain recognizable; payment
   binds to article/public key. The derivation has no publisher namespace, so the
-  same phrase/article ID at another publisher produces the same key. Network,
+  same seed/article ID at another publisher produces the same key. Passkeys
+  additionally depend on their RP hostname. Network,
   browser and payment correlation, malicious frontend code, and anonymity are
   outside the privacy promise.
 - The reader keeps secrets only in tab memory; JS cannot guarantee erasure of
-  every copy. Losing the phrase loses access; sharing it shares access. A phrase
+  every copy. Losing the passkey loses access; sharing it shares access. A passkey
   cannot restore deleted publisher grants. Article corrections retain the same
   identity/grants; never reuse an ID for unrelated content.

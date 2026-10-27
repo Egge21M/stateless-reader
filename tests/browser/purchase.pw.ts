@@ -1,7 +1,7 @@
-import { openProfile, closeProfile, closeDialog, lockReader, selectArticle } from "./reader-journey";
+import { openProfile, unlockReader, closeProfile, closeDialog, lockReader, selectArticle } from "./reader-journey";
 import { expect, test, type Page, type APIRequestContext, type BrowserContext } from '@playwright/test';
 import { decodePaymentRequest } from '@cashu/cashu-ts';
-import { restoreReader, deriveArticleKey } from '../../packages/core/src/index';
+import { readerFromPasskey, deriveArticleKey } from '../../packages/core/src/index';
 
 test.use({ trace: 'off' });
 async function pay(page: Page, request: APIRequestContext) {
@@ -42,11 +42,11 @@ function observeReader(context: BrowserContext) {
   };
 }
 
-async function secretEncodings(phrase: string) {
-  const { seed } = await restoreReader(phrase);
+async function secretEncodings(prf: number[]) {
+  const { seed } = await readerFromPasskey(new Uint8Array(prf));
   const keys = ['the-quiet-web', 'a-library-in-your-pocket'].map(id => deriveArticleKey(seed, id).privateKey);
-  const encodings = [phrase, encodeURIComponent(phrase), phrase.replaceAll(' ', '+')];
-  for (const bytes of [seed, ...keys]) {
+  const encodings: string[] = [];
+  for (const bytes of [new Uint8Array(prf), seed, ...keys]) {
     encodings.push(Buffer.from(bytes).toString('hex'), Buffer.from(bytes).toString('base64'),
       JSON.stringify([...bytes]), JSON.stringify(bytes));
     bytes.fill(0);
@@ -54,15 +54,12 @@ async function secretEncodings(phrase: string) {
   return encodings;
 }
 
-test('two independent purchases restore on demand with one phrase and no persistent credentials', async ({ page, context, request, browser }) => {
+test('two independent purchases restore on demand with one passkey and no persistent app credentials', async ({ page, context, request, browser }) => {
   const audit = observeReader(context);
   await page.goto('/');
   await openProfile(page);
-  await page.getByRole('button', { name: 'Create reader phrase', exact: true }).click();
-  const phrase = await page.getByLabel('Your reader recovery phrase', { exact: true }).inputValue();
-  expect(phrase.split(' ')).toHaveLength(12);
-  await page.getByRole('button', { name: 'Hide backup' }).click();
-  const secrets = await secretEncodings(phrase);
+  const prf = await unlockReader(page);
+  const secrets = await secretEncodings(prf);
   await audit.assertPrivate(page, secrets);
   const purchases = [
     { id: 'the-quiet-web', title: 'The quiet web', passage: 'A quiet website begins with a stopping point.' },
@@ -105,9 +102,7 @@ test('two independent purchases restore on demand with one phrase and no persist
     const restored = await fresh.newPage();
     await restored.goto('/');
     await openProfile(restored);
-    await restored.getByLabel('Restore reader recovery phrase', { exact: true }).fill(phrase);
-    await restored.getByRole('button', { name: 'Restore reader', exact: true }).click();
-    await expect(restored.getByText('Reader unlocked', { exact: true })).toBeVisible();
+    await unlockReader(restored, prf);
     await restored.waitForTimeout(1800);
     expect(restoredAudit.articles).toEqual([]);
     await restoredAudit.assertPrivate(restored, secrets);
@@ -144,9 +139,7 @@ test('two independent purchases restore on demand with one phrase and no persist
     await closeDialog(restored);
     await restored.getByRole('button', { name: 'Clear selection', exact: true }).click();
     await openProfile(restored);
-    await restored.getByRole('button', { name: 'Create reader phrase', exact: true }).click();
-    const unrelated = await restored.getByLabel('Your reader recovery phrase', { exact: true }).inputValue();
-    await restored.getByRole('button', { name: 'Hide backup' }).click();
+    const unrelated = await unlockReader(restored);
     secrets.push(...await secretEncodings(unrelated));
     for (const [index, article] of purchases.entries()) {
       const response = restored.waitForResponse(r => new URL(r.url()).pathname === `/article/${article.id}`);
@@ -163,8 +156,7 @@ test('two independent purchases restore on demand with one phrase and no persist
 test('polls use fresh signed requests only while open and closing does not cancel a wallet payment', async ({ page, request }) => {
   await page.goto('/');
   await openProfile(page);
-  await page.getByRole('button', { name: 'Create reader phrase', exact: true }).click();
-  await page.getByRole('button', { name: 'Hide backup' }).click();
+  await unlockReader(page);
   const authorizations: string[] = [];
   page.on('request', r => {
     if (new URL(r.url()).pathname === '/article/the-quiet-web') authorizations.push(r.headers()['authorization']);
@@ -192,12 +184,11 @@ test('polls use fresh signed requests only while open and closing does not cance
   expect(afterLock).toEqual([]);
 });
 
-for (const action of ['lock', 'restore', 'select another', 'close'] as const) {
+for (const action of ['lock', 'replace reader', 'select another', 'close'] as const) {
   test(`a delayed paid poll cannot restore content after ${action}`, async ({ page, request }) => {
     await page.goto('/');
     await openProfile(page);
-    await page.getByRole('button', { name: 'Create reader phrase', exact: true }).click();
-    await page.getByRole('button', { name: 'Hide backup' }).click();
+    await unlockReader(page);
     await selectArticle(page, "The quiet web");
     await expect(page.getByLabel('Payment request', { exact: true })).toBeVisible();
     let release!: () => void;
@@ -218,11 +209,9 @@ for (const action of ['lock', 'restore', 'select another', 'close'] as const) {
       if (action === 'lock') await lockReader(page);
       if (action === 'close') await page.getByRole('button', { name: 'Close payment dialog', exact: true }).click();
       if (action === 'select another') await selectArticle(page, "A library in your pocket");
-      if (action === 'restore') {
+      if (action === 'replace reader') {
         await openProfile(page);
-        await page.getByLabel('Restore reader recovery phrase', { exact: true }).fill('abandon '.repeat(11) + 'about');
-        await page.getByRole('button', { name: 'Restore reader', exact: true }).click();
-        await expect(page.getByText('Reader unlocked', { exact: true })).toBeVisible();
+        await unlockReader(page);
         await closeProfile(page);
       }
     } finally { release(); }

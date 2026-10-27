@@ -62,8 +62,8 @@ test("publisher startup requires explicit application migration before serving s
 
   const publisher = startPublisher({ port: 0, databasePath });
   publishers.push(publisher);
-  const { restoreReader, signArticleRequest } = await import("@stateless-reader/core");
-  const { seed } = await restoreReader("abandon ".repeat(11) + "about");
+  const { readerFromPasskey, signArticleRequest } = await import("@stateless-reader/core");
+  const { seed } = await readerFromPasskey(new Uint8Array(32).fill(1));
   const path = "/article/the-quiet-web";
   const response = await fetch(new URL(path, publisher.url), { headers: {
     authorization: signArticleRequest(seed, {
@@ -283,11 +283,11 @@ test.each(["SIGINT", "SIGTERM"] as const)("CLI startup serves HTTP and shuts dow
 });
 
 test("an unpaid signed article returns an ordinary NUT-18 bound to its fixed offer and reader key", async () => {
-  const { signArticleRequest, restoreReader } = await import("@stateless-reader/core");
+  const { signArticleRequest, readerFromPasskey } = await import("@stateless-reader/core");
   const { decodePaymentRequest, PaymentRequestTransportType } = await import("@cashu/cashu-ts");
   const publisher = startPublisher({ port: 0, databasePath: await temporaryDatabase() });
   publishers.push(publisher);
-  const { seed } = await restoreReader("abandon ".repeat(11) + "about");
+  const { seed } = await readerFromPasskey(new Uint8Array(32).fill(1));
   const path = "/article/the-quiet-web";
   const authorization = signArticleRequest(seed, {
     articleId: "the-quiet-web", method: "GET", path, timestamp: Math.floor(Date.now() / 1000),
@@ -301,7 +301,7 @@ test("an unpaid signed article returns an ordinary NUT-18 bound to its fixed off
     expect(body.articleId).toBe("the-quiet-web");
     expect(body.protocolVersion).toBe(1);
     expect(body.offer).toEqual({ amount: 21, mint: "https://mint.minibits.cash/Bitcoin", unit: "sat" });
-    expect(body.publicKey).toBe("360fc8d6daaa8ef054dbd8a3721cd3237f863dc9b9cc87f6df596abdfdde8dfb");
+    expect(body.publicKey).toBe("9fe9c11b3dbf30b805ba584655084ffe8c8007ea3f8f27ffdd4c7e588d42b9b8");
     expect(body.paymentRequest).toMatch(/^creqA[A-Za-z0-9_=-]+$/);
     const payment = decodePaymentRequest(body.paymentRequest);
     expect(payment.amount?.toNumber()).toBe(21);
@@ -316,17 +316,17 @@ test("an unpaid signed article returns an ordinary NUT-18 bound to its fixed off
 });
 
 test("HTTP rejects altered, malformed, stale and wrong-key authorization without disclosure", async () => {
-  const { signArticleRequest, restoreReader } = await import("@stateless-reader/core");
+  const { signArticleRequest, readerFromPasskey } = await import("@stateless-reader/core");
   const publisher = startPublisher({ port: 0, databasePath: await temporaryDatabase() });
   publishers.push(publisher);
-  const { seed } = await restoreReader("abandon ".repeat(11) + "about");
+  const { seed } = await readerFromPasskey(new Uint8Array(32).fill(1));
   const now = Math.floor(Date.now() / 1000);
   const binding = { articleId: "the-quiet-web", method: "GET", path: "/article/the-quiet-web", timestamp: now };
   const valid = signArticleRequest(seed, binding);
   const cases = [
     { path: binding.path, authorization: "garbage" },
     { path: binding.path, authorization: valid.slice(0, -1) + (valid.endsWith("f") ? "e" : "f") },
-    { path: binding.path, authorization: valid.replace("360fc8d6daaa8ef054dbd8a3721cd3237f863dc9b9cc87f6df596abdfdde8dfb", "0d174f330614021cad5085b2325d6fabb9a0d0fe18ffe5c6663fc0ade32efbc3") },
+    { path: binding.path, authorization: valid.replace("9fe9c11b3dbf30b805ba584655084ffe8c8007ea3f8f27ffdd4c7e588d42b9b8", "0d174f330614021cad5085b2325d6fabb9a0d0fe18ffe5c6663fc0ade32efbc3") },
     { path: binding.path, authorization: signArticleRequest(seed, { ...binding, timestamp: now - 65 }) },
     { path: binding.path, authorization: signArticleRequest(seed, { ...binding, timestamp: now + 65 }) },
     { path: binding.path, authorization: signArticleRequest(seed, { ...binding, method: "POST" }) },
@@ -349,11 +349,11 @@ test("HTTP rejects altered, malformed, stale and wrong-key authorization without
 });
 
 test("NUT-18 uses the configured HTTPS origin rather than caller-controlled hosts", async () => {
-  const { signArticleRequest, restoreReader } = await import("@stateless-reader/core");
+  const { signArticleRequest, readerFromPasskey } = await import("@stateless-reader/core");
   const { decodePaymentRequest } = await import("@cashu/cashu-ts");
   const publisher = startPublisher({ port: 0, databasePath: await temporaryDatabase(), publicOrigin: "https://publisher.example" });
   publishers.push(publisher);
-  const { seed } = await restoreReader("abandon ".repeat(11) + "about");
+  const { seed } = await readerFromPasskey(new Uint8Array(32).fill(1));
   const path = "/article/the-quiet-web";
   const authorization = signArticleRequest(seed, { articleId: "the-quiet-web", path, method: "GET", timestamp: Math.floor(Date.now() / 1000) });
   const response = await fetch(new URL(path, publisher.url), {

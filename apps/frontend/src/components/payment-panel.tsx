@@ -190,7 +190,7 @@ export function PaymentPanel({
           <DialogHeader>
             <DialogTitle>Read {article.title}</DialogTitle>
             <DialogDescription>
-              Pay once for this article. Return with your reader phrase, without
+              Pay once for this article. Return with your passkey, without
               an account.
             </DialogDescription>
           </DialogHeader>

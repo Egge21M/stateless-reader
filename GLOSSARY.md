@@ -23,9 +23,6 @@ _Avoid_: Access token
 **Reader seed**:
 The reader-held secret from which their article keys can be recreated, separate from their Cashu wallet's seed. Possession of it enables access to purchases made with its derived keys.
 
-**Reader recovery phrase**:
-The sequence of words a reader backs up and uses to recreate their reader seed and regain access to purchased articles.
-
 **Reader passkey**:
 A reader-controlled credential that recreates a dedicated reader seed. A newly created reader passkey represents a separate reader, rather than an additional way to access an existing reader's purchases.
 

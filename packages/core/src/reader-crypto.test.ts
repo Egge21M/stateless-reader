@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
-import { restoreReader, deriveArticleKey, signArticleRequest } from "./index";
+import { deriveArticleKey, signArticleRequest } from "./index";
 import fixture from "../test-vectors/reader-v1.json";
 
 const hex = (bytes: Uint8Array) => Buffer.from(bytes).toString("hex");
 
-test("empty-passphrase BIP39 recovery and article signatures match independent v1 vectors", async () => {
-  const reader = await restoreReader(fixture.phrase);
+test("article keys and signatures match independent raw-seed v1 vectors", async () => {
+  const reader = { seed: Buffer.from(fixture.seed, "hex") };
   expect(hex(reader.seed)).toBe(fixture.seed);
   for (const vector of fixture.vectors) {
     const key = deriveArticleKey(reader.seed, vector.articleId);
@@ -18,26 +18,11 @@ test("empty-passphrase BIP39 recovery and article signatures match independent v
   }
 });
 
-test("restoration validates twelve-word English checksums and normalizes whitespace", async () => {
-  for (const phrase of ["", "abandon ".repeat(12), "password ".repeat(12), "abandon ".repeat(11), fixture.phrase.toUpperCase()]) {
-    await expect(restoreReader(phrase)).rejects.toThrow("Invalid reader recovery phrase");
-  }
-  const restored = await restoreReader(` \n${fixture.phrase.replaceAll(" ", "\t ")}  `);
-  expect(restored.phrase).toBe(fixture.phrase);
-  expect(hex(restored.seed)).toBe(fixture.seed);
-  const first = deriveArticleKey(restored.seed, fixture.vectors[0]!.articleId);
-  const second = deriveArticleKey(restored.seed, fixture.vectors[1]!.articleId);
-  expect(first.publicKey).not.toBe(second.publicKey);
-});
-
-test("new reader phrases are random, twelve words, and recoverable", async () => {
-  const { generateReaderPhrase } = await import("./index");
-  const phrases = new Set(Array.from({ length: 8 }, () => generateReaderPhrase()));
-  expect(phrases.size).toBe(8);
-  for (const phrase of phrases) {
-    expect(phrase.split(" ")).toHaveLength(12);
-    expect((await restoreReader(phrase)).seed).toHaveLength(64);
-  }
+test("article keys are distinct and reject invalid seed lengths", () => {
+  const seed = Buffer.from(fixture.seed, "hex");
+  expect(deriveArticleKey(seed, fixture.vectors[0]!.articleId).publicKey)
+    .not.toBe(deriveArticleKey(seed, fixture.vectors[1]!.articleId).publicKey);
+  for (const size of [0, 32, 63, 65]) expect(() => deriveArticleKey(new Uint8Array(size), "the-quiet-web")).toThrow();
 });
 
 test("v1 signatures verify only their bound request and the inclusive 60-second window", async () => {
@@ -63,7 +48,7 @@ test("v1 signatures verify only their bound request and the inclusive 60-second 
 
 test("v1 rejects noncanonical identifiers, methods, timestamps and header suffixes", async () => {
   const { verifyArticleRequest } = await import("./index");
-  const reader = await restoreReader(fixture.phrase);
+  const reader = { seed: Buffer.from(fixture.seed, "hex") };
   const vector = fixture.vectors[0]!;
   const request = { articleId: vector.articleId, method: "GET", path: `/article/${vector.articleId}`, timestamp: vector.timestamp };
   expect(verifyArticleRequest(vector.authorization + "\n", request, vector.timestamp)).toBeNull();

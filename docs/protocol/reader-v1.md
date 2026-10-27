@@ -1,24 +1,19 @@
 # Reader protocol v1 (frozen)
 
-This is the compatibility contract for #4. Changes require a new version; never
-reinterpret an existing grant. No durable grants are issued in this slice.
+This specifies article-key derivation and signed HTTP requests. Reader seed
+creation is specified separately by [passkey v2](passkey-reader-v2.md); its
+intentional breaking change does not alter the article/request wire format.
 
 ## Recovery and article keys
 
-- Generate 128 random bits using the browser CSPRNG and encode with the English
-  BIP39 wordlist (12 words, including its checksum). Restoration normalizes NFKD,
-  trims surrounding whitespace, collapses whitespace to ASCII spaces, then
-  validates exactly 12 lowercase English words and their checksum. Other lengths,
-  unknown words and bad checksums fail. There is no user-supplied passphrase.
-- BIP39 seed: PBKDF2-HMAC-SHA512, 2048 iterations, password UTF-8 of the normalized
-  mnemonic, salt UTF-8 `mnemonic` (empty BIP39 passphrase), output 64 bytes.
+- Reader seed: the 64-byte output of passkey v2. No phrase conversion.
 - Article IDs are 1–128 ASCII characters matching `[a-z0-9]+(-[a-z0-9]+)*`.
-- HKDF-SHA256: IKM = 64-byte BIP39 seed; salt = UTF-8
+- HKDF-SHA256: IKM = 64-byte reader seed; salt = UTF-8
   `stateless-reader/article-key/v1`; info = UTF-8 of compact JSON array
   `["Ed25519","<articleId>"]`; output length 32 bytes. This is an Ed25519 private
   seed, not a scalar. Derive the standard RFC8032 Ed25519 public key from it.
 - No publisher namespace, origin, wallet seed, or extra password enters derivation.
-  The same reader phrase and article ID at another publisher produce the same key.
+  The same reader seed and article ID at another publisher produce the same key.
 
 ## Signed HTTP requests
 
@@ -58,8 +53,8 @@ path/query, timestamp or protocol version invalidates authorization.
 - Valid signed GET for an unpaid article: 402 JSON with `paymentRequest` (encoded
   NUT-18), `articleId`, `publicKey`, `protocolVersion: 1`, and `offer`
   (`amount`, `unit`, `mint`). All article responses use `Cache-Control: no-store`.
-- No 200 premium response, grant creation, payment redemption, or unpaid checkout
-  persistence is implemented by #4. Payment POST remains unavailable until #5.
+- A durable grant permits a 200 premium response for its article/public-key pair.
+  Payment POST settles Cashu before recording that grant; unpaid checkout state is not persisted.
 
 The ordinary NUT-18 CBOR request uses `creqA` and URL-safe base64 (`+` → `-`, `/`
 → `_`, padding retained), with exactly one `post` transport. Its target is
@@ -72,17 +67,13 @@ cashu-ts is pinned to `5.0.0-rc.4` per the integration research.
 
 ## Secrets and compatibility evidence
 
-Reader phrases, seed and derived private keys stay in browser memory. Lock,
-replacement/restoration and reload drop the active identity and payment view.
-Async work is invalidated on identity changes so stale results cannot restore it.
-This does not promise JavaScript memory erasure. Never log or persist reader
-credentials. Backup is reader-controlled; loss loses access, sharing shares access.
-The reader phrase is separate from an external Cashu wallet's recovery phrase.
+Reader seeds and derived private keys stay in browser memory. Lock, replacement
+and reload drop the active identity and payment view. Async work is invalidated
+on identity changes so stale results cannot restore it. This does not promise
+JavaScript memory erasure. Never log or persist reader credentials. Passkey
+availability and recovery limitations are described in the passkey v2 contract.
 
-`packages/core/test-vectors/reader-v1.json` contains fixed expected bytes and
-signatures. `derive-reader-v1.py` independently produces them using Python's
-hashlib PBKDF2 and cryptography/OpenSSL HKDF and Ed25519, without scure/noble or
-application imports. The zero-entropy English BIP39 mnemonic is the standard
-`abandon` × 11 + `about` example, with the required empty passphrase. Tests compare
-the public compatibility API with these committed values, not runtime-derived
-expectations. These are public test secrets only.
+`packages/core/test-vectors/reader-v1.json` contains fixed expected article keys
+and signatures for the public raw seed `00..3f`. `derive-reader-v1.py` independently
+produces them using Python cryptography/OpenSSL HKDF and Ed25519, without
+application imports. Passkey v2 has separate end-to-end seed derivation vectors.

@@ -1,12 +1,11 @@
 """Independent vector oracle. Run with Python 3 and cryptography >= 46."""
-import hashlib
 import json
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-phrase = 'abandon ' * 11 + 'about'
-seed = hashlib.pbkdf2_hmac('sha512', phrase.encode(), b'mnemonic', 2048, 64)
+# Public raw-seed fixture: article/request protocol is independent of seed source.
+seed = bytes(range(64))
 vectors = []
 for article in ['the-quiet-web', 'a-library-in-your-pocket']:
     private = HKDF(algorithm=hashes.SHA256(), length=32,
@@ -20,4 +19,4 @@ for article in ['the-quiet-web', 'a-library-in-your-pocket']:
     vectors.append(dict(articleId=article, privateKey=private.hex(), publicKey=public,
                         timestamp=int(timestamp), message=message, signature=signature,
                         authorization=f'Reader-v1 {public}.{timestamp}.{signature}'))
-print(json.dumps(dict(phrase=phrase, seed=seed.hex(), vectors=vectors), indent=2))
+print(json.dumps(dict(seed=seed.hex(), vectors=vectors), indent=2))

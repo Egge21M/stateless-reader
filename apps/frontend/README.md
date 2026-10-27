@@ -2,20 +2,17 @@
 
 The React/Vite frontend uses the project's Base UI shadcn components and warm paper/ink
 light/dark theme with serif editorial headlines. The catalogue is public: browsing and selecting an article need
-no account or reader recovery phrase. Selection shows the public preview and a
-locked-content notice with a direct entry to Profile. All reader creation,
-restoration, backup and lock controls live in the accessible Profile dialog in
-the masthead. Closing it immediately unmounts the phrase and draft, hides backup
-on the next open, and cancels any pending restoration. This is local reader-key
-management, not a publisher account. Create a random twelve-word reader phrase or restore a
-validated English BIP39 phrase to request article access. The empty BIP39
-passphrase is fixed; the reader phrase is separate from the external wallet seed.
-Back up the phrase privately. Losing it loses access; sharing it shares access.
+no account or passkey. Selection shows a preview and entry to the accessible
+Profile dialog. Continue with passkey attempts discovery; failure offers explicit
+creation. Reader seeds derive directly from WebAuthn PRF output with HKDF.
+There are no phrase, import, export or backup controls. Only the same credential
+and compatible provider/browser can recreate the reader.
 
-Reader secrets stay in memory. Reload requires restoration; lock and replacement
-clear the active identity, draft and payment view, including pending async work.
-This does not guarantee erasure from JavaScript memory. No phrase/seed/private
-key is persisted or transmitted. A valid unpaid request displays a NUT-18 QR and
+Reader secrets stay in memory. Reload requires another passkey unlock; lock and
+replacement clear the identity and payment view. Closing Profile cancels pending
+unlock work. Stale results cannot restore an older reader. No seed/private key or
+credential ID is persisted or transmitted by the app. The passkey provider stores
+the credential. JavaScript cannot guarantee memory erasure. A valid unpaid request displays a NUT-18 QR and
 copyable text with the fixed mint, unit and no-change/no-refund policy.
 The payment request opens in a modal after unpaid access is confirmed. Profile
 and payment dialogs never stack. While the payment dialog is open, fresh signed requests poll every 1.5 seconds
@@ -25,7 +22,7 @@ outside click, the close controls, locking, or replacing the selection
 aborts pending reads and prevents stale results from restoring an old view.
 Closing does not cancel a wallet payment already sent. Reopen to check access with a fresh signed request. Both dialogs trap keyboard
 focus and restore it on dismissal; successful payment focuses the reading heading.
-See the frozen [v1 compatibility contract](../../docs/protocol/reader-v1.md).
+See [passkey v2](../../docs/protocol/passkey-reader-v2.md) and [article/request v1](../../docs/protocol/reader-v1.md).
 
 ## Run locally
 
@@ -61,7 +58,7 @@ bun run test:browser
 
 The browser suite explicitly migrates a temporary application SQLite database,
 then launches the real publisher
-and Vite on `127.0.0.1:4173`. That port must be free. It verifies public metadata,
+and Vite on port 4173. Native WebAuthn tests use `localhost` as the RP hostname; numeric IP RP IDs are not supported. That port must be free. It verifies public metadata,
 keyboard selection and focus, loading, empty, and error/retry behavior. A
 regression check rejects backend fixture source requests. Only rare HTTP
 outcomes are substituted at the browser network boundary; the normal
@@ -71,7 +68,7 @@ Reader browser checks also cover recovery in fresh contexts, memory-only state,
 network disclosure, independent QR decoding, and stale async response/recovery
 races. Purchase checks also cover two independent grants, fresh-browser paid
 access, signed polling, cancellation and delayed paid responses. Reader and
-purchase and dialog tests disable failure traces to avoid recording phrase-bearing DOM.
+purchase and dialog tests disable failure traces to avoid recording credential-bearing traces.
 Other browser failure traces use the ignored `test-results` directory.
 
 ## Components

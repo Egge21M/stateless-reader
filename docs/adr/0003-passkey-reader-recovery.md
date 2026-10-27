@@ -1,3 +1,7 @@
+---
+status: superseded by ADR-0004
+---
+
 # Recover a reader locally with a passkey PRF
 
 Extend the randomly generated phrase entry in [ADR 0001](0001-accountless-article-access.md) with a discoverable WebAuthn passkey whose PRF output deterministically produces a twelve-word reader recovery phrase. Keep the existing BIP39 seed and article-key protocol, so the phrase independently recovers the same purchases; neither a publisher account nor a stored encrypted recovery blob is needed. Freeze the [passkey derivation v1](../protocol/passkey-reader-v1.md) because changing it after purchases would create a different reader.

@@ -1,10 +1,8 @@
-import { mnemonicToSeed, validateMnemonic, generateMnemonic } from "@scure/bip39";
 import { hkdf } from "@noble/hashes/hkdf.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { ed25519 } from "@noble/curves/ed25519.js";
 
-import { wordlist } from "@scure/bip39/wordlists/english.js";
 
 function isArticleId(value: string) {
   return value.length <= 128 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.exec(value)?.[0] === value;
@@ -14,16 +12,7 @@ const utf8 = (value: string) => new TextEncoder().encode(value);
 export const READER_PROTOCOL_VERSION = 1;
 
 export interface ReaderIdentity {
-  phrase: string;
   seed: Uint8Array;
-}
-
-export async function restoreReader(phrase: string): Promise<ReaderIdentity> {
-  const normalized = phrase.normalize("NFKD").trim().split(/\s+/u).join(" ");
-  if (normalized.split(" ").length !== 12 || !validateMnemonic(normalized, wordlist)) {
-    throw new Error("Invalid reader recovery phrase");
-  }
-  return { phrase: normalized, seed: await mnemonicToSeed(normalized, "") };
 }
 
 export function deriveArticleKey(seed: Uint8Array, articleId: string) {
@@ -61,10 +50,6 @@ export function signArticleRequest(seed: Uint8Array, request: ArticleRequest): s
   } finally {
     key.privateKey.fill(0);
   }
-}
-
-export function generateReaderPhrase(): string {
-  return generateMnemonic(wordlist, 128);
 }
 
 /** Returns the proven article public key, or null. No replay/session state. */
