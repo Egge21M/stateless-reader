@@ -74,7 +74,15 @@ be positive safe integers. Proof shape, duplicate secrets, key encoding,
 article, mint, unit and price are validated before settlement. Underpayment
 returns 400 without redemption. Exact payment or overpayment is accepted; the
 publisher keeps the entire amount with no change/refunds. Payload errors return
-400, oversized bodies 413, and wrong content type 415.
+400 and oversized bodies 413 (including streamed bodies without Content-Length).
+Send `Content-Type: application/json`. For Macadamia/URLSession compatibility,
+missing Content-Type and `application/x-www-form-urlencoded` also accept the same
+raw JSON payload; media types are case-insensitive and may have parameters.
+There is no form decoding: URL-encoded form data and malformed JSON return 400
+`Invalid payment JSON`. Other explicit media types, including `text/plain`,
+return 415 `Unsupported payment Content-Type; send application/json` even for
+valid JSON. All accepted header variants use identical validation and settlement.
+See [source and regression evidence](../../docs/evidence/issue-7/macadamia-content-type.md).
 
 A process-local per-pair queue serializes the existing-grant check, Coco receive,
 and unique grant insert. An already-granted pair returns 409 before redeeming

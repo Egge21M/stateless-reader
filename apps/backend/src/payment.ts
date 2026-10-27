@@ -29,8 +29,12 @@ const scalar = (value: unknown) => typeof value === 'string' && /^[0-9a-fA-F]{64
 
 /** Validate wire shape only; authenticity/spentness still require a successful swap. */
 export async function paymentToken(request: Request, offer: ArticleOffer): Promise<Token> {
-  if (request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() !== 'application/json') {
-    throw new PaymentError('Expected application/json', 415);
+  const contentType = request.headers.get('content-type');
+  const mediaType = contentType?.split(';')[0]?.trim().toLowerCase();
+  // Macadamia sends JSON without setting Content-Type; URLSession can supply
+  // its form default. Accept that label, but always parse and validate JSON.
+  if (contentType !== null && mediaType !== 'application/json' && mediaType !== 'application/x-www-form-urlencoded') {
+    throw new PaymentError('Unsupported payment Content-Type; send application/json', 415);
   }
   // Bound streamed as well as Content-Length bodies, before JSON parsing.
   const reader = request.body?.getReader();

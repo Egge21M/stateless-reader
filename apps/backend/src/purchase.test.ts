@@ -15,6 +15,7 @@ const articleId = 'the-quiet-web';
 const mint = 'https://mint.minibits.cash/Bitcoin';
 const { seed } = await restoreReader('abandon '.repeat(11) + 'about');
 const publicKey = deriveArticleKey(seed, articleId).publicKey;
+const paymentContentTypes = ['application/json', null, 'application/x-www-form-urlencoded'];
 const proof = (amount = 32, secret: string = crypto.randomUUID()) => ({
   amount, secret, id: '00107937db0cc865',
   C: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
@@ -67,7 +68,33 @@ test('a settled payment unlocks only its signed article and reader key', async (
   expect((await fetch(new URL(`/article/${articleId}`, publisher.url))).status).toBe(401);
 });
 
-test('invalid NUT-18 requests reject before consuming any submitted ecash', async () => {
+test.each(paymentContentTypes)('JSON payment with Content-Type %s unlocks after settlement', async (contentType) => {
+  let finalized = false;
+  const wallet = controlledSettlement();
+  const publisher = await harness({ async receive(token) {
+    return finalized ? wallet.receive(token) : { state: 'prepared' };
+  } });
+  expect((await read(publisher.url)).status).toBe(402);
+  const headers = new Headers();
+  if (contentType) headers.set('Content-Type', contentType);
+  const request = () => new Request(new URL(`/payment/${articleId}/${publicKey}`, publisher.url).href, {
+    method: 'POST', headers,
+    // Bytes avoid fetch silently supplying text/plain for a string body.
+    body: new TextEncoder().encode(JSON.stringify({ mint, unit: 'sat', proofs: [proof(32, 'synthetic-header-regression')] })),
+  });
+  expect(request().headers.get('content-type')).toBe(contentType ?? null);
+  const unsettled = await fetch(request());
+  expect(unsettled.status).toBe(422);
+  expect((await read(publisher.url)).status).toBe(402);
+  finalized = true;
+  const response = await fetch(request());
+  expect(response.status).toBe(200);
+  expect(response.headers.get('access-control-allow-origin')).toBe('*');
+  expect(await response.json()).toEqual({ status: 'paid', articleId, publicKey, protocolVersion: 1 });
+  expect((await read(publisher.url)).status).toBe(200);
+});
+
+test.each(paymentContentTypes)('invalid NUT-18 requests with Content-Type %s reject before consuming any submitted ecash', async (contentType) => {
   const publisher = await harness();
   const validProof = proof();
   const valid = { mint, unit: 'sat', proofs: [validProof] };
@@ -98,12 +125,63 @@ test('invalid NUT-18 requests reject before consuming any submitted ecash', asyn
   ];
   for (const [path, payload, status] of cases) {
     const response = await fetch(new URL(path || `/payment/${articleId}/${publicKey}`, publisher.url), {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://wallet.example' },
-      body: JSON.stringify(payload),
+      method: 'POST', headers: { ...(contentType ? { 'Content-Type': contentType } : {}), Origin: 'https://wallet.example' },
+      body: new TextEncoder().encode(JSON.stringify(payload)),
     });
     expect(response.status).toBe(status);
     expect(response.headers.get('access-control-allow-origin')).toBe('*');
     expect((await response.json() as { error: string }).error).toBeString();
+    expect((await read(publisher.url)).status).toBe(402);
+  }
+  expect((await pay(publisher.url, [validProof])).status).toBe(200);
+});
+
+test.each(paymentContentTypes)('Content-Type %s still requires JSON and caps streamed bodies at 128 KiB', async (contentType) => {
+  const publisher = await harness();
+  const url = new URL(`/payment/${articleId}/${publicKey}`, publisher.url);
+  const headers = new Headers();
+  if (contentType) headers.set('Content-Type', contentType);
+  for (const body of ['{', 'mint=https%3A%2F%2Fmint.minibits.cash%2FBitcoin&unit=sat&proofs=%5B%5D']) {
+    const response = await fetch(url, { method: 'POST', headers, body: new TextEncoder().encode(body) });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'Invalid payment JSON' });
+    expect(response.headers.get('access-control-allow-origin')).toBe('*');
+    expect((await read(publisher.url)).status).toBe(402);
+  }
+  const payload = { mint, unit: 'sat', proofs: [proof()], memo: '' };
+  const empty = JSON.stringify(payload);
+  const exactLimit = new TextEncoder().encode(JSON.stringify({ ...payload, memo: 'x'.repeat(128 * 1024 - empty.length) }));
+  const stream = new ReadableStream<Uint8Array>({ start(controller) {
+    controller.enqueue(exactLimit);
+    controller.enqueue(new TextEncoder().encode(' '));
+    controller.close();
+  } });
+  // Do not reuse a connection whose oversized chunked upload is cancelled.
+  const streamHeaders = new Headers(headers);
+  streamHeaders.set('Connection', 'close');
+  const request = new Request(url.href, { method: 'POST', headers: streamHeaders, body: stream });
+  expect(request.headers.get('content-length')).toBeNull();
+  const oversized = await fetch(request);
+  expect(oversized.status).toBe(413);
+  expect(await oversized.json()).toEqual({ error: 'Payment payload too large' });
+  expect(oversized.headers.get('access-control-allow-origin')).toBe('*');
+  expect((await read(publisher.url)).status).toBe(402);
+  // The exact limit remains valid, and the rejected body consumed no proofs.
+  expect((await fetch(url, { method: 'POST', headers, body: exactLimit })).status).toBe(200);
+  expect((await read(publisher.url)).status).toBe(200);
+});
+
+test('unrecognized payment media types reject even valid JSON without consuming proofs', async () => {
+  const publisher = await harness();
+  const validProof = proof();
+  for (const contentType of ['text/plain', 'application/octet-stream', 'multipart/form-data', 'application/jsonp']) {
+    const response = await fetch(new URL(`/payment/${articleId}/${publicKey}`, publisher.url), {
+      method: 'POST', headers: { 'Content-Type': contentType },
+      body: JSON.stringify({ mint, unit: 'sat', proofs: [validProof] }),
+    });
+    expect(response.status).toBe(415);
+    expect(await response.json()).toEqual({ error: 'Unsupported payment Content-Type; send application/json' });
+    expect(response.headers.get('access-control-allow-origin')).toBe('*');
     expect((await read(publisher.url)).status).toBe(402);
   }
   expect((await pay(publisher.url, [validProof])).status).toBe(200);
