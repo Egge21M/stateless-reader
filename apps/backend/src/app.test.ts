@@ -308,7 +308,9 @@ test("an unpaid signed article returns an ordinary NUT-18 bound to its fixed off
     expect(payment.unit).toBe("sat");
     expect(payment.mints).toEqual(["https://mint.minibits.cash/Bitcoin"]);
     expect(payment.singleUse).toBe(true);
-    expect(payment.transport).toEqual([{ type: PaymentRequestTransportType.POST,
+    // CDK 0.17.7 requires an array when the CBOR transport g member is present.
+    // Pinned external parser evidence: docs/evidence/issue-7/cdk-interop.md.
+    expect(payment.transport).toEqual([{ type: PaymentRequestTransportType.POST, tags: [],
       target: `${publisher.url.origin}/payment/the-quiet-web/${body.publicKey}` }]);
   }
 });
