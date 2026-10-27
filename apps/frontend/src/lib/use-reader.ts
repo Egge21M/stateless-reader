@@ -56,7 +56,7 @@ export function useReader() {
             error instanceof PasskeyError
               ? error.message
               : create
-                ? "Passkey setup did not finish. If a passkey was saved, try Continue with passkey again."
+                ? "Passkey setup did not finish. If a passkey was saved, try Login with passkey again."
                 : "Could not unlock with a passkey. Try again or use another device from the passkey prompt. If you are new here, create a new reader below.",
         })
       }

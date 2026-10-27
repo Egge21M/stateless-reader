@@ -3,7 +3,7 @@
 The React/Vite frontend uses the project's Base UI shadcn components and warm paper/ink
 light/dark theme with serif editorial headlines. The catalogue is public: browsing and selecting an article need
 no account or passkey. Selection shows a preview and entry to the accessible
-Profile dialog. Continue with passkey attempts discovery; failure offers explicit
+Profile dialog. Login with passkey attempts discovery; failure offers explicit
 creation. Reader seeds derive directly from WebAuthn PRF output with HKDF.
 There are no phrase, import, export or backup controls. Only the same credential
 and compatible provider/browser can recreate the reader.

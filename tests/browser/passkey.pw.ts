@@ -47,9 +47,9 @@ test("one passkey entry restores the vector without an account, storage, or iden
   const traffic: string[] = [];
   context.on("request", r => traffic.push(r.url(), JSON.stringify(r.headers()), r.postData() ?? ""));
   await profile(page);
-  await expect(page.getByRole("button", { name: "Create a new reader", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "First time? Create a reader", exact: true })).toHaveCount(0);
   await expect(page.getByRole("textbox")).toHaveCount(0);
-  await page.getByRole("button", { name: "Continue with passkey", exact: true }).click();
+  await page.getByRole("button", { name: "Login with passkey", exact: true }).click();
   await expect(page.getByText("Reader unlocked", { exact: true })).toBeVisible();
   await expect(page.getByRole("textbox")).toHaveCount(0);
   const result = page.waitForResponse(r => new URL(r.url()).pathname === "/article/the-quiet-web");
@@ -58,7 +58,7 @@ test("one passkey entry restores the vector without an account, storage, or iden
   await page.reload();
   await page.getByRole("button", { name: "Profile", exact: true }).click();
   await expect(page.getByText("Reader locked", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Continue with passkey", exact: true }).click();
+  await page.getByRole("button", { name: "Login with passkey", exact: true }).click();
   await expect(page.getByText("Reader unlocked", { exact: true })).toBeVisible();
   await expect(page.getByRole("textbox")).toHaveCount(0);
   expect(await page.evaluate(async () => ({ local: localStorage.length, session: sessionStorage.length,
@@ -72,10 +72,10 @@ for (const mode of ["cancel", "unsupported", "short"] as const) {
   test(`${mode} leaves the reader locked without creating a credential`, async ({ page }) => {
     await mockPasskey(page, mode);
     await profile(page);
-    await page.getByRole("button", { name: "Continue with passkey", exact: true }).click();
+    await page.getByRole("button", { name: "Login with passkey", exact: true }).click();
     await expect(page.getByRole("alert")).toBeVisible();
     await expect(page.getByText("Reader locked", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Create a new reader", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "First time? Create a reader", exact: true })).toBeVisible();
     expect(await page.evaluate(() => (window as unknown as { passkeyCalls: { operation: string }[] }).passkeyCalls.map(c => c.operation))).toEqual(["get"]);
   });
 }
@@ -83,8 +83,8 @@ for (const mode of ["cancel", "unsupported", "short"] as const) {
 test("explicit creation evaluates PRF on the created credential when the provider requires a second prompt", async ({ page }) => {
   await mockPasskey(page, "create");
   await profile(page);
-  await page.getByRole("button", { name: "Continue with passkey", exact: true }).click();
-  await page.getByRole("button", { name: "Create a new reader", exact: true }).click();
+  await page.getByRole("button", { name: "Login with passkey", exact: true }).click();
+  await page.getByRole("button", { name: "First time? Create a reader", exact: true }).click();
   await expect(page.getByText("Reader unlocked", { exact: true })).toBeVisible();
   const calls = await page.evaluate(() => (window as unknown as { passkeyCalls: { operation: string; allowed: number; input: string; challenge: string }[] }).passkeyCalls);
   expect(calls.map(c => c.operation)).toEqual(["get", "create", "get"]);
@@ -99,7 +99,7 @@ for (const action of ["dismiss", "cancel", "retry"] as const) {
   test(`a late passkey result cannot revive a reader after ${action}`, async ({ page }) => {
     await mockPasskey(page, "delayed");
     await profile(page);
-    await page.getByRole("button", { name: "Continue with passkey", exact: true }).click();
+    await page.getByRole("button", { name: "Login with passkey", exact: true }).click();
     await expect(page.getByText("Unlocking reader…", { exact: true })).toBeVisible();
     if (action === "dismiss") await page.keyboard.press("Escape");
     if (action !== "dismiss") await page.getByRole("button", { name: "Cancel", exact: true }).click();
@@ -130,8 +130,8 @@ test("native WebAuthn PRF creates and rediscovers a paid reader after lock and r
       return native(options);
     };
   });
-  await page.getByRole("button", { name: "Continue with passkey", exact: true }).click();
-  await page.getByRole("button", { name: "Create a new reader", exact: true }).click();
+  await page.getByRole("button", { name: "Login with passkey", exact: true }).click();
+  await page.getByRole("button", { name: "First time? Create a reader", exact: true }).click();
   await expect(page.getByText("Reader unlocked", { exact: true })).toBeVisible();
   await selectArticle(page, "The quiet web");
   const encoded = page.getByLabel("Payment request", { exact: true });
@@ -142,14 +142,14 @@ test("native WebAuthn PRF creates and rediscovers a paid reader after lock and r
   await expect(page.getByRole("article")).toContainText("A quiet website begins with a stopping point.");
   await openProfile(page);
   await page.getByRole("button", { name: "Lock reader", exact: true }).click();
-  await page.getByRole("button", { name: "Continue with passkey", exact: true }).click();
+  await page.getByRole("button", { name: "Login with passkey", exact: true }).click();
   await expect(page.getByText("Reader unlocked", { exact: true })).toBeVisible();
   await closeProfile(page);
   await expect(page.getByRole("article")).toContainText("A quiet website begins with a stopping point.");
   await page.reload();
   await page.getByRole("button", { name: "Profile", exact: true }).click();
   await expect(page.getByText("Reader locked", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Continue with passkey", exact: true }).click();
+  await page.getByRole("button", { name: "Login with passkey", exact: true }).click();
   await expect(page.getByText("Reader unlocked", { exact: true })).toBeVisible();
   await selectArticle(page, "The quiet web");
   await expect(page.getByRole("article")).toContainText("A quiet website begins with a stopping point.");

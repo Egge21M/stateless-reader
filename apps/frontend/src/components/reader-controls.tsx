@@ -26,7 +26,7 @@ export function ReaderControls({
             disabled={reader.pending}
             onClick={() => void reader.passkey()}
           >
-            Continue with passkey
+            Login with passkey
           </Button>
         </div>
       )}
@@ -34,11 +34,15 @@ export function ReaderControls({
       {reader.error && (
         <div className="flex flex-col items-start gap-3">
           <p className="text-sm text-muted-foreground">
-            New here? Create a passkey for a new reader. A new passkey starts
-            fresh; it does not recover purchases made with another passkey.
+            Creating a reader starts fresh. To return to previous purchases,
+            use your existing passkey.
           </p>
-          <Button variant="outline" onClick={() => void reader.passkey(true)}>
-            Create a new reader
+          <Button
+            variant="link"
+            size="sm"
+            onClick={() => void reader.passkey(true)}
+          >
+            First time? Create a reader
           </Button>
         </div>
       )}

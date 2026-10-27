@@ -26,7 +26,7 @@ export async function unlockReader(page: Page, prf = [...randomBytes(32)]) {
       type: "public-key", getClientExtensionResults: () => ({ prf: { results: { first: new Uint8Array(bytes).buffer } } }),
     }) });
   }, prf);
-  await page.getByRole("button", { name: "Continue with passkey", exact: true }).click();
+  await page.getByRole("button", { name: "Login with passkey", exact: true }).click();
   await expect(page.getByText("Reader unlocked", { exact: true })).toBeVisible();
   return prf;
 }

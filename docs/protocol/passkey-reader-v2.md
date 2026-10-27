@@ -15,7 +15,7 @@ Each ceremony uses a fresh random 32-byte challenge generated client-side. Chall
 
 ## Entry and lifecycle
 
-“Continue with passkey” calls `credentials.get` with no stored credential allowlist. Discovery and optional other-device choices are handled by the user's provider. Failure or cancellation leaves the reader locked; it never automatically creates another credential. Creation requires an explicit “Create a new reader” action.
+“Login with passkey” calls `credentials.get` with no stored credential allowlist. Discovery and optional other-device choices are handled by the user's provider. Failure or cancellation leaves the reader locked; it never automatically creates another credential. Creation requires an explicit “First time? Create a reader” action.
 
 If creation returns only `prf.enabled`, request a further assertion restricted to the newly created credential, with the same PRF input. An interrupted or unsupported creation may leave a credential in the provider; retry Continue before creating again. Missing or malformed PRF output must not fall back to another seed source.
 

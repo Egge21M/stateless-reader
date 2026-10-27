@@ -80,6 +80,6 @@ test("locking removes reader controls until the next unlock", async ({ page }) =
   await unlockReader(page);
   await openProfile(page);
   await page.getByRole("button", { name: "Lock reader", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Continue with passkey", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Login with passkey", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Lock reader", exact: true })).toHaveCount(0);
 });
