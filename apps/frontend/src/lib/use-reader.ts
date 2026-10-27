@@ -80,6 +80,12 @@ export function useReader() {
     ...state,
     unlock,
     lock: clear,
+    dismissProfile: () => {
+      // Use the synchronous identity ref: creation and dismissal can happen before
+      // React commits the pending state. Invalidate that work even in the same turn.
+      if (!active.current) clear()
+      else setState((current) => ({ ...current, backup: false, error: "" }))
+    },
     toggleBackup: () =>
       setState((current) => ({ ...current, backup: !current.backup })),
   }

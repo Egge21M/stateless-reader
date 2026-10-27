@@ -5,7 +5,7 @@ test("a reader browses the publisher catalogue without an account or recovery ph
   expect(response.ok()).toBe(true);
   const { articles } = await response.json();
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Find your next good read." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Stateless Reader." })).toBeVisible();
   const listings = page.getByRole("list", { name: "Articles" }).getByRole("listitem");
   await expect(listings).toHaveCount(articles.length);
   for (const article of articles) {

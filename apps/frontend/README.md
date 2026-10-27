@@ -1,9 +1,13 @@
 # Stateless Reader frontend
 
-The React/Vite frontend uses the project's Base UI shadcn components and neutral
-light/dark theme. The catalogue is public: browsing and selecting an article need
+The React/Vite frontend uses the project's Base UI shadcn components and warm paper/ink
+light/dark theme with serif editorial headlines. The catalogue is public: browsing and selecting an article need
 no account or reader recovery phrase. Selection shows the public preview and a
-locked-content notice. Create a random twelve-word reader phrase or restore a
+locked-content notice with a direct entry to Profile. All reader creation,
+restoration, backup and lock controls live in the accessible Profile dialog in
+the masthead. Closing it immediately unmounts the phrase and draft, hides backup
+on the next open, and cancels any pending restoration. This is local reader-key
+management, not a publisher account. Create a random twelve-word reader phrase or restore a
 validated English BIP39 phrase to request article access. The empty BIP39
 passphrase is fixed; the reader phrase is separate from the external wallet seed.
 Back up the phrase privately. Losing it loses access; sharing it shares access.
@@ -13,11 +17,14 @@ clear the active identity, draft and payment view, including pending async work.
 This does not guarantee erasure from JavaScript memory. No phrase/seed/private
 key is persisted or transmitted. A valid unpaid request displays a NUT-18 QR and
 copyable text with the fixed mint, unit and no-change/no-refund policy.
-While the payment panel is open, fresh signed requests poll every 1.5 seconds
+The payment request opens in a modal after unpaid access is confirmed. Profile
+and payment dialogs never stack. While the payment dialog is open, fresh signed requests poll every 1.5 seconds
 (after the previous read completes). A successful payment displays the full
-article and stops polling. Closing the panel, locking, or replacing the selection
+article in the main reading area, closes the dialog, and stops polling. Escape,
+outside click, the close controls, locking, or replacing the selection
 aborts pending reads and prevents stale results from restoring an old view.
-Closing does not cancel a wallet payment already sent. Reopen to check access.
+Closing does not cancel a wallet payment already sent. Reopen to check access with a fresh signed request. Both dialogs trap keyboard
+focus and restore it on dismissal; successful payment focuses the reading heading.
 See the frozen [v1 compatibility contract](../../docs/protocol/reader-v1.md).
 
 ## Run locally
@@ -64,7 +71,7 @@ Reader browser checks also cover recovery in fresh contexts, memory-only state,
 network disclosure, independent QR decoding, and stale async response/recovery
 races. Purchase checks also cover two independent grants, fresh-browser paid
 access, signed polling, cancellation and delayed paid responses. Reader and
-purchase tests disable failure traces to avoid recording phrase-bearing DOM.
+purchase and dialog tests disable failure traces to avoid recording phrase-bearing DOM.
 Other browser failure traces use the ignored `test-results` directory.
 
 ## Components

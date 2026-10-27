@@ -1,3 +1,4 @@
+import { openProfile, closeProfile, closeDialog, lockReader, selectArticle } from "./reader-journey";
 import { expect, test, type Page, type APIRequestContext, type BrowserContext } from '@playwright/test';
 import { decodePaymentRequest } from '@cashu/cashu-ts';
 import { restoreReader, deriveArticleKey } from '../../packages/core/src/index';
@@ -56,6 +57,7 @@ async function secretEncodings(phrase: string) {
 test('two independent purchases restore on demand with one phrase and no persistent credentials', async ({ page, context, request, browser }) => {
   const audit = observeReader(context);
   await page.goto('/');
+  await openProfile(page);
   await page.getByRole('button', { name: 'Create reader phrase', exact: true }).click();
   const phrase = await page.getByLabel('Your reader recovery phrase', { exact: true }).inputValue();
   expect(phrase.split(' ')).toHaveLength(12);
@@ -69,7 +71,7 @@ test('two independent purchases restore on demand with one phrase and no persist
   const keys: string[] = [];
   for (const article of purchases) {
     const response = page.waitForResponse(r => new URL(r.url()).pathname === `/article/${article.id}`);
-    await page.getByRole('button', { name: `Select ${article.title}`, exact: true }).click();
+    await selectArticle(page, article.title);
     // The second article still requires its own payment after the first is bought.
     expect((await response).status()).toBe(402);
     await expect(page.getByLabel('Payment request', { exact: true })).toBeVisible();
@@ -78,6 +80,8 @@ test('two independent purchases restore on demand with one phrase and no persist
     const payment = await pay(page, request);
     keys.push(payment.transport![0]!.target.split('/').at(-1)!);
     await expect(page.getByRole('article')).toContainText(article.passage);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Selected article' }).getByRole('heading', { name: article.title, exact: true })).toBeFocused();
     await expect(page.getByLabel('Payment request', { exact: true })).toHaveCount(0);
     await audit.assertPrivate(page, secrets);
   }
@@ -86,9 +90,10 @@ test('two independent purchases restore on demand with one phrase and no persist
   await page.waitForTimeout(1800);
   expect(audit.articles).toHaveLength(readCount);
 
-  await page.getByRole('button', { name: 'Lock reader', exact: true }).click();
+  await lockReader(page);
   await expect(page.getByRole('article')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Select The quiet web', exact: true }).click();
+  await selectArticle(page, "The quiet web");
+  await openProfile(page);
   await expect(page.getByText('Reader locked', { exact: true })).toBeVisible();
   await page.waitForTimeout(1800);
   expect(audit.articles).toHaveLength(readCount);
@@ -99,6 +104,7 @@ test('two independent purchases restore on demand with one phrase and no persist
   try {
     const restored = await fresh.newPage();
     await restored.goto('/');
+    await openProfile(restored);
     await restored.getByLabel('Restore reader recovery phrase', { exact: true }).fill(phrase);
     await restored.getByRole('button', { name: 'Restore reader', exact: true }).click();
     await expect(restored.getByText('Reader unlocked', { exact: true })).toBeVisible();
@@ -110,7 +116,7 @@ test('two independent purchases restore on demand with one phrase and no persist
       for (const [index, article] of purchases.entries()) {
         const before = restoredAudit.articles.length;
         const response = restored.waitForResponse(r => new URL(r.url()).pathname === `/article/${article.id}`);
-        await restored.getByRole('button', { name: `Select ${article.title}`, exact: true }).click();
+        await selectArticle(restored, article.title);
         expect((await response).status()).toBe(200);
         await expect(restored.getByRole('article')).toContainText(article.passage);
         await expect(restored.getByLabel('Payment request', { exact: true })).toHaveCount(0);
@@ -124,9 +130,10 @@ test('two independent purchases restore on demand with one phrase and no persist
     expect(restoredAudit.payments).toEqual([]);
     // Reload a paid, unlocked tab: there must be no hidden credential that can reopen it.
     await restored.reload();
+    await openProfile(restored);
     await expect(restored.getByText('Reader locked', { exact: true })).toBeVisible();
     const beforeReloadSelection = restoredAudit.articles.length;
-    await restored.getByRole('button', { name: 'Select A library in your pocket', exact: true }).click();
+    await selectArticle(restored, "A library in your pocket");
     await restored.waitForTimeout(1800);
     await expect(restored.getByRole('article')).toHaveCount(0);
     await expect(restored.getByLabel('Payment request', { exact: true })).toHaveCount(0);
@@ -134,14 +141,16 @@ test('two independent purchases restore on demand with one phrase and no persist
     await restoredAudit.assertPrivate(restored, secrets);
 
     // An unrelated freshly generated reader inherits neither purchase.
+    await closeDialog(restored);
     await restored.getByRole('button', { name: 'Clear selection', exact: true }).click();
+    await openProfile(restored);
     await restored.getByRole('button', { name: 'Create reader phrase', exact: true }).click();
     const unrelated = await restored.getByLabel('Your reader recovery phrase', { exact: true }).inputValue();
     await restored.getByRole('button', { name: 'Hide backup' }).click();
     secrets.push(...await secretEncodings(unrelated));
     for (const [index, article] of purchases.entries()) {
       const response = restored.waitForResponse(r => new URL(r.url()).pathname === `/article/${article.id}`);
-      await restored.getByRole('button', { name: `Select ${article.title}`, exact: true }).click();
+      await selectArticle(restored, article.title);
       expect((await response).status()).toBe(402);
       await expect(restored.getByLabel('Payment request', { exact: true })).toBeVisible();
       expect(restoredAudit.articles.at(-1)?.key).not.toBe(keys[index]);
@@ -153,17 +162,18 @@ test('two independent purchases restore on demand with one phrase and no persist
 
 test('polls use fresh signed requests only while open and closing does not cancel a wallet payment', async ({ page, request }) => {
   await page.goto('/');
+  await openProfile(page);
   await page.getByRole('button', { name: 'Create reader phrase', exact: true }).click();
   await page.getByRole('button', { name: 'Hide backup' }).click();
   const authorizations: string[] = [];
   page.on('request', r => {
     if (new URL(r.url()).pathname === '/article/the-quiet-web') authorizations.push(r.headers()['authorization']);
   });
-  await page.getByRole('button', { name: 'Select The quiet web', exact: true }).click();
+  await selectArticle(page, "The quiet web");
   await expect(page.getByLabel('Payment request', { exact: true })).toBeVisible();
   const payment = decodePaymentRequest(await page.getByLabel('Payment request', { exact: true }).inputValue());
   await expect.poll(() => new Set(authorizations).size).toBeGreaterThanOrEqual(2);
-  await page.getByRole('button', { name: 'Close payment panel', exact: true }).click();
+  await page.getByRole('button', { name: 'Close payment dialog', exact: true }).click();
   const count = authorizations.length;
   await page.waitForTimeout(1800);
   expect(authorizations).toHaveLength(count);
@@ -172,10 +182,10 @@ test('polls use fresh signed requests only while open and closing does not cance
   await expect(page.getByRole('article')).toHaveCount(0);
   await page.getByRole('button', { name: 'Check article access', exact: true }).click();
   await expect(page.getByRole('article')).toContainText('A quiet website begins with a stopping point.');
-  await page.getByRole('button', { name: 'Select A library in your pocket', exact: true }).click();
+  await selectArticle(page, "A library in your pocket");
   await expect(page.getByLabel('Payment request', { exact: true })).toBeVisible();
   const afterLock: string[] = [];
-  await page.getByRole('button', { name: 'Lock reader', exact: true }).click();
+  await lockReader(page);
   page.on('request', r => { if (new URL(r.url()).pathname.startsWith('/article/')) afterLock.push(r.url()); });
   await page.waitForTimeout(1800);
   expect(afterLock).toEqual([]);
@@ -184,9 +194,10 @@ test('polls use fresh signed requests only while open and closing does not cance
 for (const action of ['lock', 'restore', 'select another', 'close'] as const) {
   test(`a delayed paid poll cannot restore content after ${action}`, async ({ page, request }) => {
     await page.goto('/');
+    await openProfile(page);
     await page.getByRole('button', { name: 'Create reader phrase', exact: true }).click();
     await page.getByRole('button', { name: 'Hide backup' }).click();
-    await page.getByRole('button', { name: 'Select The quiet web', exact: true }).click();
+    await selectArticle(page, "The quiet web");
     await expect(page.getByLabel('Payment request', { exact: true })).toBeVisible();
     let release!: () => void;
     let received!: () => void;
@@ -203,13 +214,15 @@ for (const action of ['lock', 'restore', 'select another', 'close'] as const) {
     await pay(page, request);
     await requested;
     try {
-      if (action === 'lock') await page.getByRole('button', { name: 'Lock reader', exact: true }).click();
-      if (action === 'close') await page.getByRole('button', { name: 'Close payment panel', exact: true }).click();
-      if (action === 'select another') await page.getByRole('button', { name: 'Select A library in your pocket', exact: true }).click();
+      if (action === 'lock') await lockReader(page);
+      if (action === 'close') await page.getByRole('button', { name: 'Close payment dialog', exact: true }).click();
+      if (action === 'select another') await selectArticle(page, "A library in your pocket");
       if (action === 'restore') {
+        await openProfile(page);
         await page.getByLabel('Restore reader recovery phrase', { exact: true }).fill('abandon '.repeat(11) + 'about');
         await page.getByRole('button', { name: 'Restore reader', exact: true }).click();
         await expect(page.getByText('Reader unlocked', { exact: true })).toBeVisible();
+        await closeProfile(page);
       }
     } finally { release(); }
     await completed;

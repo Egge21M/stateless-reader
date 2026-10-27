@@ -1,3 +1,4 @@
+import { openProfile, closeProfile, closeDialog, lockReader, selectArticle } from "./reader-journey";
 import jsQR from "jsqr";
 import { PNG } from "pngjs";
 import { expect, test } from "@playwright/test";
@@ -9,6 +10,7 @@ const phrase = "abandon ".repeat(11) + "about";
 
 test("reader creates a phrase, backs it up, locks and restores without persistent credentials", async ({ page, context }) => {
   await page.goto("/");
+  await openProfile(page);
   await page.getByRole("button", { name: "Create reader phrase", exact: true }).click();
   const backup = page.getByLabel("Your reader recovery phrase", { exact: true });
   await expect(backup).toBeVisible();
@@ -19,8 +21,9 @@ test("reader creates a phrase, backs it up, locks and restores without persisten
   await expect(backup).toHaveCount(0);
   await page.getByRole("button", { name: "Show backup" }).click();
   await expect(backup).toHaveValue(created);
-  await page.getByRole("button", { name: "Lock reader", exact: true }).click();
+  await lockReader(page);
   await expect(backup).toHaveCount(0);
+  await openProfile(page);
   await page.getByLabel("Restore reader recovery phrase", { exact: true }).fill(created);
   await page.getByRole("button", { name: "Restore reader", exact: true }).click();
   await expect(page.getByText("Reader unlocked", { exact: true })).toBeVisible();
@@ -33,6 +36,7 @@ test("reader creates a phrase, backs it up, locks and restores without persisten
   expect(storage).toEqual({ local: {}, session: {}, databases: [], caches: [] });
   expect(await context.cookies()).toEqual([]);
   await page.reload();
+  await openProfile(page);
   await expect(page.getByText("Reader locked", { exact: true })).toBeVisible();
   await expect(backup).toHaveCount(0);
 });
@@ -45,11 +49,12 @@ test("an unpaid reader sees a bound QR and copyable request without transmitting
   page.on("console", (message) => logs.push(message.text()));
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto("/");
+  await openProfile(page);
   await page.getByLabel("Restore reader recovery phrase", { exact: true }).fill(phrase);
   await page.getByRole("button", { name: "Restore reader", exact: true }).click();
   await expect(page.getByText("Reader unlocked", { exact: true })).toBeVisible();
   const responsePromise = page.waitForResponse((response) => response.url().includes("/article/the-quiet-web"));
-  await page.getByRole("button", { name: "Select The quiet web", exact: true }).click();
+  await selectArticle(page, "The quiet web");
   expect((await responsePromise).status()).toBe(402);
   const request = page.getByLabel("Payment request", { exact: true });
   await expect(request).toBeVisible();
@@ -71,7 +76,7 @@ test("an unpaid reader sees a bound QR and copyable request without transmitting
   await expect(page.getByText("Payment request copied.", { exact: true })).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(encoded);
   const secondResponse = page.waitForResponse((response) => response.url().includes("/article/a-library-in-your-pocket"));
-  await page.getByRole("button", { name: "Select A library in your pocket", exact: true }).click();
+  await selectArticle(page, "A library in your pocket");
   expect((await secondResponse).status()).toBe(402);
   await expect(request).not.toHaveValue(encoded);
   expect(decodePaymentRequest(await request.inputValue()).transport?.[0]?.target)
@@ -82,19 +87,23 @@ test("an unpaid reader sees a bound QR and copyable request without transmitting
     expect(traffic.join("\n")).not.toContain(secret);
     expect(logs.join("\n")).not.toContain(secret);
   }
-  await page.getByRole("button", { name: "Lock reader", exact: true }).click();
+  await lockReader(page);
   await expect(request).toHaveCount(0);
   await expect(page.getByRole("img", { name: "Payment request QR code" })).toHaveCount(0);
 });
 
 test("invalid restoration clears the previous reader, backup, draft and payment view", async ({ page }) => {
   await page.goto("/");
+  await openProfile(page);
   await page.getByLabel("Restore reader recovery phrase", { exact: true }).fill(phrase);
   await page.getByRole("button", { name: "Restore reader", exact: true }).click();
   await expect(page.getByText("Reader unlocked", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Show backup" }).click();
-  await page.getByRole("button", { name: "Select The quiet web", exact: true }).click();
+  await selectArticle(page, "The quiet web");
   await expect(page.getByLabel("Payment request", { exact: true })).toBeVisible();
+  await openProfile(page);
+  await page.getByRole("button", { name: "Show backup" }).click();
+  await expect(page.getByLabel("Your reader recovery phrase", { exact: true })).toBeVisible();
   await page.getByLabel("Restore reader recovery phrase", { exact: true }).fill("abandon ".repeat(12));
   await page.getByRole("button", { name: "Restore reader", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Invalid reader recovery phrase");
@@ -106,6 +115,7 @@ test("invalid restoration clears the previous reader, backup, draft and payment 
 
 test("locking during asynchronous recovery cannot resurrect the reader", async ({ page }) => {
   await page.goto("/");
+  await openProfile(page);
   await page.getByLabel("Restore reader recovery phrase", { exact: true }).fill(phrase);
   // Both user actions occur before pending PBKDF2 promises can complete.
   await page.evaluate(() => {
@@ -118,12 +128,13 @@ test("locking during asynchronous recovery cannot resurrect the reader", async (
   await page.waitForTimeout(400);
   await expect(page.getByText("Reader locked", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Show backup" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Select The quiet web", exact: true }).click();
+  await selectArticle(page, "The quiet web");
   await expect(page.getByLabel("Payment request", { exact: true })).toHaveCount(0);
 });
 
 test("a newer invalid restoration wins over an earlier pending phrase creation", async ({ page }) => {
   await page.goto("/");
+  await openProfile(page);
   await page.getByLabel("Restore reader recovery phrase", { exact: true }).fill("invalid phrase");
   await page.evaluate(() => {
     const buttons = [...document.querySelectorAll("button")];
@@ -144,31 +155,46 @@ for (const action of ["lock", "restore", "select another", "clear selection"] as
     const pending = new Promise<void>((resolve) => { release = resolve; });
     const requested = new Promise<void>((resolve) => { received = resolve; });
     const completed = new Promise<void>((resolve) => { finished = resolve; });
-    // Delay a real publisher 402 at the HTTP boundary, not a fabricated service result.
+    // Hold every request from the original reader, including StrictMode's replay.
+    // A one-use route can be consumed by an aborted development request before
+    // its handler runs. Replacement readers must still reach the real publisher.
+    let delayedKey: string | undefined;
     await page.route("**/article/the-quiet-web", async (route) => {
+      const key = route.request().headers().authorization?.split(" ")[1]?.split(".")[0];
+      delayedKey ??= key;
+      if (key !== delayedKey) { await route.continue(); return; }
       const response = await route.fetch();
       received();
       await pending;
       try { await route.fulfill({ response }); } finally { finished(); }
-    }, { times: 1 });
+    });
     await page.goto("/");
+    await openProfile(page);
     await page.getByLabel("Restore reader recovery phrase", { exact: true }).fill(phrase);
     await page.getByRole("button", { name: "Restore reader", exact: true }).click();
     await expect(page.getByText("Reader unlocked", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Select The quiet web", exact: true }).click();
-    await requested;
+    await selectArticle(page, "The quiet web");
+    await test.step("publisher response reaches the delay", () => requested);
     const payment = page.getByLabel("Payment request", { exact: true });
     let replacement: string | undefined;
     try {
-      if (action === "lock") await page.getByRole("button", { name: "Lock reader", exact: true }).click();
-      if (action === "clear selection") await page.getByRole("button", { name: "Clear selection" }).click();
+      if (action === "lock") await lockReader(page);
+      if (action === "clear selection") {
+        await closeDialog(page);
+        await page.getByRole("button", { name: "Clear selection" }).click();
+      }
       if (action === "select another") {
-        await page.getByRole("button", { name: "Select A library in your pocket", exact: true }).click();
+        await selectArticle(page, "A library in your pocket");
       }
       if (action === "restore") {
+        await openProfile(page);
         await page.getByLabel("Restore reader recovery phrase", { exact: true })
           .fill("legal winner thank year wave sausage worth useful legal winner thank yellow");
         await page.getByRole("button", { name: "Restore reader", exact: true }).click();
+      }
+      if (action === "restore") {
+        await expect(page.getByText("Reader unlocked", { exact: true })).toBeVisible();
+        await closeProfile(page);
       }
       if (action === "restore" || action === "select another") {
         await expect(payment).toBeVisible();
@@ -178,7 +204,7 @@ for (const action of ["lock", "restore", "select another", "clear selection"] as
           .not.toContain("360fc8d6daaa8ef054dbd8a3721cd3237f863dc9b9cc87f6df596abdfdde8dfb");
       }
     } finally { release(); }
-    await completed;
+    await test.step("delayed response is released", () => completed);
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     if (replacement) await expect(payment).toHaveValue(replacement);
     else await expect(payment).toHaveCount(0);
@@ -198,11 +224,12 @@ test("a fresh browser restores the same article key and checks only the selected
         if (path.startsWith("/article/")) articlePaths.push(path);
       });
       await page.goto("/");
+      await openProfile(page);
       await page.getByLabel("Restore reader recovery phrase", { exact: true }).fill(phrase);
       await page.getByRole("button", { name: "Restore reader", exact: true }).click();
       await expect(page.getByText("Reader unlocked", { exact: true })).toBeVisible();
       expect(articlePaths).toEqual([]);
-      await page.getByRole("button", { name: "Select The quiet web", exact: true }).click();
+      await selectArticle(page, "The quiet web");
       const payment = page.getByLabel("Payment request", { exact: true });
       await expect(payment).toBeVisible();
       const target = decodePaymentRequest(await payment.inputValue()).transport?.[0]?.target;
