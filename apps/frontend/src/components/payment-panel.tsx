@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, type RefObject } from "react"
 import {
   signArticleRequest,
   type ReaderIdentity,
@@ -10,6 +10,14 @@ import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Textarea } from "@/components/ui/textarea"
+
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 type Offer = PaymentRequiredResponse["offer"]
 type PaymentState =
@@ -42,15 +50,18 @@ function isPayment(
 export function PaymentPanel({
   identity,
   article,
+  readingHeading,
 }: {
   identity: ReaderIdentity
-  article: { id: string; offer: Offer }
+  article: { id: string; title: string; offer: Offer }
+  readingHeading: RefObject<HTMLHeadingElement | null>
 }) {
   const [state, setState] = useState<PaymentState>({ status: "loading" })
   const [attempt, setAttempt] = useState(0)
   const [open, setOpen] = useState(true)
   const [copyStatus, setCopyStatus] = useState("")
   const mounted = useRef(false)
+  const accessTrigger = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     if (!open) return
@@ -74,13 +85,22 @@ export function PaymentPanel({
         })
         const payment: unknown = await response.json()
         if (controller.signal.aborted) return
-        if (response.status === 200 && payment && typeof payment === 'object') {
+        if (response.status === 200 && payment && typeof payment === "object") {
           const content = payment as Partial<ArticleContentResponse>
-          if (content.articleId !== article.id || content.publicKey !== publicKey ||
-              content.protocolVersion !== 1 || typeof content.body !== 'string' || typeof content.title !== 'string') {
-            throw new Error('Invalid article content')
+          if (
+            content.articleId !== article.id ||
+            content.publicKey !== publicKey ||
+            content.protocolVersion !== 1 ||
+            typeof content.body !== "string" ||
+            typeof content.title !== "string"
+          ) {
+            throw new Error("Invalid article content")
           }
-          setState({ status: 'content', article: content as ArticleContentResponse })
+          setState({
+            status: "content",
+            article: content as ArticleContentResponse,
+          })
+          setOpen(false)
           return
         }
         if (
@@ -91,7 +111,9 @@ export function PaymentPanel({
         }
         setState({ status: "ready", payment })
         // Schedule after completion: no overlapping reads, and a fresh signature every time.
-        timer = setTimeout(() => { void requestPayment() }, 1500)
+        timer = setTimeout(() => {
+          void requestPayment()
+        }, 1500)
       } catch {
         if (!controller.signal.aborted) setState({ status: "error" })
       }
@@ -104,102 +126,144 @@ export function PaymentPanel({
     }
   }, [identity, article, attempt, open])
 
-  if (!open) return (
-    <div className="flex flex-col items-start gap-3">
-      <p className="text-sm text-muted-foreground">Payment panel closed. A payment already sent by your wallet can still complete.</p>
-      <Button variant="outline" onClick={() => { setState({ status: 'loading' }); setOpen(true) }}>Check article access</Button>
-    </div>
-  )
-  if (state.status === 'content') return (
-    <article aria-label={state.article.title} className="flex max-w-prose flex-col gap-5 leading-relaxed">
-      {state.article.body.split('\n\n').map((paragraph, index) => <p key={index}>{paragraph}</p>)}
-    </article>
-  )
-
-  if (state.status === "loading")
-    return <p role="status">Checking article access…</p>
-  if (state.status === "error")
-    return (
-      <div className="flex flex-col items-start gap-3">
-        <Alert variant="destructive">
-          <AlertTitle>Could not open article</AlertTitle>
-          <AlertDescription>
-            Check your connection and device clock, then try again.
-          </AlertDescription>
-        </Alert>
-        <Button
-          variant="outline"
-          onClick={() => {
-            setState({ status: "loading" })
-            setAttempt((value) => value + 1)
-          }}
-        >
-          Retry article
-        </Button>
-      </div>
-    )
+  const payment = state.status === "ready" ? state.payment : null
   return (
-    <section aria-label="Payment panel" className="flex min-w-0 flex-col gap-5">
-      <Alert role="status">
-        <AlertTitle>Full article locked</AlertTitle>
-        <AlertDescription>
-          Use a compatible external Cashu wallet with ecash from the mint below.
-        </AlertDescription>
-      </Alert>
-      <p className="text-sm break-words text-muted-foreground">
-        {state.payment.offer.amount} {state.payment.offer.unit} · Mint:{" "}
-        {state.payment.offer.mint}
-      </p>
-      <p className="text-sm text-muted-foreground">
-        Pay at least the article price. Excess payment is retained. No change or
-        refunds. Closing this panel does not cancel a payment already sent by
-        your wallet.
-      </p>
-      <p className="text-sm text-muted-foreground">
-        Waiting for payment. This panel checks for access automatically.
-      </p>
-      <Button variant="outline" className="self-start" onClick={() => setOpen(false)}>Close payment panel</Button>
-      <QRCodeSVG
-        value={state.payment.paymentRequest}
-        size={280}
-        marginSize={4}
-        role="img"
-        title="Payment request QR code"
-        aria-label="Payment request QR code"
-        className="h-auto max-w-full self-start"
-      />
-      <FieldGroup>
-        <Field>
-          <FieldLabel htmlFor="payment-request">Payment request</FieldLabel>
-          <Textarea
-            id="payment-request"
-            readOnly
-            value={state.payment.paymentRequest}
-            rows={4}
-            spellCheck={false}
-          />
-        </Field>
-      </FieldGroup>
-      <Button
-        className="self-start"
-        variant="outline"
-        onClick={async () => {
-          try {
-            await navigator.clipboard.writeText(state.payment.paymentRequest)
-            if (mounted.current) setCopyStatus("Payment request copied.")
-          } catch {
-            if (mounted.current)
-              setCopyStatus(
-                "Could not copy. Select and copy the request text above."
-              )
-          }
+    <>
+      {state.status === "content" ? (
+        <article aria-label={state.article.title} className="reading-body">
+          {state.article.body.split("\n\n").map((paragraph, index) => (
+            <p key={index}>{paragraph}</p>
+          ))}
+        </article>
+      ) : (
+        <div className="flex flex-col items-start gap-3">
+          {open && state.status === "loading" && (
+            <p role="status">Checking article access…</p>
+          )}
+          {open && state.status === "error" && (
+            <Alert variant="destructive">
+              <AlertTitle>Could not open article</AlertTitle>
+              <AlertDescription>
+                Check your connection and device clock, then try again.
+              </AlertDescription>
+            </Alert>
+          )}
+          {!open && (
+            <p className="text-sm text-muted-foreground">
+              Payment dialog closed. A payment already sent by your wallet can
+              still complete.
+            </p>
+          )}
+          <Button
+            ref={accessTrigger}
+            variant="outline"
+            onClick={() => {
+              setState({ status: "loading" })
+              setCopyStatus("")
+              setAttempt((value) => value + 1)
+              setOpen(true)
+            }}
+          >
+            {open && state.status === "error"
+              ? "Retry article"
+              : "Check article access"}
+          </Button>
+        </div>
+      )}
+      <Dialog
+        open={open && !!payment}
+        onOpenChange={(next) => {
+          if (!next) setOpen(false)
         }}
       >
-        Copy payment request
-      </Button>
-      <p role="status" className="text-sm text-muted-foreground">
-        {copyStatus}
-      </p>
-    </section>
+        <DialogContent
+          className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl"
+          finalFocus={
+            state.status === "content" ? readingHeading : accessTrigger
+          }
+        >
+          <DialogHeader>
+            <DialogTitle>Read {article.title}</DialogTitle>
+            <DialogDescription>
+              Pay once for this article. Return with your reader phrase, without
+              an account.
+            </DialogDescription>
+          </DialogHeader>
+          {open && payment && (
+            <div className="flex min-w-0 flex-col gap-4">
+              <div className="flex items-baseline justify-between gap-4">
+                <p className="font-heading text-3xl">
+                  {payment.offer.amount} {payment.offer.unit}
+                </p>
+                <p className="text-sm text-muted-foreground">Article access</p>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Use a compatible external Cashu wallet with ecash from the mint
+                below.
+              </p>
+              <QRCodeSVG
+                value={payment.paymentRequest}
+                size={280}
+                marginSize={4}
+                role="img"
+                title="Payment request QR code"
+                aria-label="Payment request QR code"
+                className="h-auto max-w-full self-center"
+              />
+              <p className="text-xs break-all text-muted-foreground">
+                Mint: {payment.offer.mint}
+              </p>
+              <FieldGroup>
+                <Field>
+                  <FieldLabel htmlFor="payment-request">
+                    Payment request
+                  </FieldLabel>
+                  <Textarea
+                    id="payment-request"
+                    readOnly
+                    value={payment.paymentRequest}
+                    rows={2}
+                    spellCheck={false}
+                  />
+                </Field>
+              </FieldGroup>
+              <Button
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(payment.paymentRequest)
+                    if (mounted.current)
+                      setCopyStatus("Payment request copied.")
+                  } catch {
+                    if (mounted.current)
+                      setCopyStatus(
+                        "Could not copy. Select and copy the request text above."
+                      )
+                  }
+                }}
+              >
+                Copy payment request
+              </Button>
+              {copyStatus && (
+                <p role="status" className="text-sm text-muted-foreground">
+                  {copyStatus}
+                </p>
+              )}
+              <p role="status" className="text-sm text-muted-foreground">
+                Waiting for payment. Access checks automatically while this
+                dialog is open.
+              </p>
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Pay at least the article price. Excess payment is retained. No
+                change or refunds. Closing this dialog does not cancel a payment
+                already sent by your wallet.
+              </p>
+              <Button variant="outline" onClick={() => setOpen(false)}>
+                Close payment dialog
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

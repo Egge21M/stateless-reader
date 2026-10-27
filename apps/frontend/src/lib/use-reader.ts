@@ -80,6 +80,11 @@ export function useReader() {
     ...state,
     unlock,
     lock: clear,
+    dismissProfile: () => {
+      // A dismissed pending restoration must not later reveal a newly created backup.
+      if (state.pending) clear()
+      else setState((current) => ({ ...current, backup: false, error: "" }))
+    },
     toggleBackup: () =>
       setState((current) => ({ ...current, backup: !current.backup })),
   }
