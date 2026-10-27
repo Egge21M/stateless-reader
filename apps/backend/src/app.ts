@@ -3,7 +3,7 @@ import { PaymentRequest, PaymentRequestTransportType } from "@cashu/cashu-ts";
 import { and, eq, sql } from "drizzle-orm";
 import { openDatabase } from "./db";
 import { sameDatabaseFile } from "./db/paths";
-import { articles, publicCatalogue } from "./articles";
+import { articles, publicCatalogue, type PublisherArticle } from "./articles";
 import { accessGrants } from "./db/schema";
 import type { Settlement } from "./settlement";
 import { PaymentError, paymentHeaders, paymentToken, validPublicKey } from "./payment";
@@ -17,6 +17,8 @@ export interface PublisherOptions {
   settlement?: Settlement;
   /** Override only for isolated mint tests; operator entry point fixes Minibits. */
   mint?: string;
+  /** Publisher-owned fixture edition. Preserve IDs for corrections; never reuse them. */
+  articles?: readonly PublisherArticle[];
 }
 
 export function startPublisher(options: PublisherOptions) {
@@ -30,7 +32,7 @@ export function startPublisher(options: PublisherOptions) {
     }
     publicOrigin = origin.origin;
   }
-  const catalogue = articles.map(article => ({ ...article, offer: {
+  const catalogue = (options.articles ?? articles).map(article => ({ ...article, offer: {
     ...article.offer, mint: options.mint ?? article.offer.mint,
   } }));
   if (options.settlement?.databasePath && sameDatabaseFile(options.databasePath, options.settlement.databasePath)) {
@@ -59,7 +61,7 @@ export function startPublisher(options: PublisherOptions) {
       port: options.port ?? 3000,
       routes: {
         "/articles": {
-          GET: () => Response.json({ articles: publicCatalogue(options.mint) }),
+          GET: () => Response.json({ articles: publicCatalogue(catalogue) }),
         },
         "/article/:articleId": {
           GET: (request) => {

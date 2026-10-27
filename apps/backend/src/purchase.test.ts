@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'bun:test';
+import { afterEach, expect, test, spyOn } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { restoreReader, signArticleRequest, deriveArticleKey } from '@stateless-reader/core';
 import { startPublisher } from './app';
@@ -211,6 +211,36 @@ test('completed grants survive reopening the application database and still reje
   expect((await read(restarted.url)).status).toBe(200);
   expect((await pay(restarted.url)).status).toBe(409);
   expect(wallet.balance).toBe(32);
+});
+
+test('an existing grant repeatedly opens a corrected article years later without another payment', async () => {
+  const publisher = await harness();
+  expect((await pay(publisher.url)).status).toBe(200);
+  expect((await read(publisher.url)).status).toBe(200);
+  await publisher.stop();
+
+  const correction = {
+    id: articleId, title: 'The quiet web — corrected',
+    preview: 'Updated notes on places to read.',
+    offer: { amount: 21, unit: 'sat', mint },
+    body: 'Correction: a quiet website can offer navigation without an endless feed.',
+  };
+  // A new fixture edition is deployed with the same identity and grant database.
+  // No settlement adapter is needed to read an existing purchase.
+  const restarted = startPublisher({ port: 0, databasePath: publisher.databasePath, articles: [correction] });
+  resources.push(restarted);
+  const clock = spyOn(Date, 'now').mockReturnValue(Date.now() + 10 * 365 * 24 * 60 * 60 * 1000);
+  try {
+    for (let visit = 0; visit < 3; visit++) {
+      const content = await read(restarted.url);
+      expect(content.status).toBe(200);
+      expect(await content.json()).toEqual({ articleId, publicKey, protocolVersion: 1,
+        title: correction.title, body: correction.body });
+    }
+    const catalogue = await fetch(new URL('/articles', restarted.url));
+    expect(await catalogue.json()).toEqual({ articles: [{ id: articleId,
+      title: correction.title, preview: correction.preview, offer: correction.offer }] });
+  } finally { clock.mockRestore(); }
 });
 
 

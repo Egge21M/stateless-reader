@@ -102,6 +102,13 @@ exposes `balance()` through Coco's public `wallet.balances.total` API. The optio
 programmatic `mint` override is for valueless local-mint tests; the CLI does not
 expose a mint override.
 
+The programmatic `articles` option supplies a publisher-owned fixture edition;
+the CLI defaults to `src/articles.ts`. Catalogue metadata and authorized content
+use the same edition. To publish a correction, update its title, preview or body
+while preserving its ID and offer, then restart normally with the retained grant
+database. Never reuse an ID for unrelated content. This is startup configuration,
+not a publishing endpoint or a reader-supplied catalogue.
+
 A started publisher owns its settlement adapter. `stop()` is idempotent: stop
 accepting connections, drain all accepted payment handlers (even disconnected
 clients), close idle keep-alives, dispose Coco, then close SQLite. SIGINT/SIGTERM
@@ -127,6 +134,10 @@ checking retained spendable funds via `balance()` plus signed access through HTT
 CORS, persistence and draining shutdown. `tests/browser/purchase.pw.ts` at the repo
 root covers two independent purchases, fresh-browser recovery, fresh signed
 polling, cancellation and delayed paid responses using the real publisher/Coco.
-These are useful foundations for #6's broader restart/recovery acceptance checks.
+The recovery journey restores both purchases with their original distinct keys,
+checks that an unrelated phrase remains unpaid, and verifies no access scans or
+hidden browser credentials. `src/purchase.test.ts` also deploys a corrected fixture
+edition and reads it repeatedly with the existing grant ten simulated years later,
+without a settlement adapter. See [reader recovery and its limits](../../README.md#recovering-purchases).
 Live external-wallet/Minibits interoperability and HTTPS deployment remain #7;
 automated success does not establish that live demonstration.
