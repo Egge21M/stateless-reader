@@ -182,6 +182,7 @@ test('polls use fresh signed requests only while open and closing does not cance
   await expect(page.getByRole('article')).toHaveCount(0);
   await page.getByRole('button', { name: 'Check article access', exact: true }).click();
   await expect(page.getByRole('article')).toContainText('A quiet website begins with a stopping point.');
+  await expect(page.getByRole('region', { name: 'Selected article' }).getByRole('heading', { name: 'The quiet web', exact: true })).toBeFocused();
   await selectArticle(page, "A library in your pocket");
   await expect(page.getByLabel('Payment request', { exact: true })).toBeVisible();
   const afterLock: string[] = [];

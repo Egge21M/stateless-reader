@@ -96,6 +96,11 @@ export function PaymentPanel({
           ) {
             throw new Error("Invalid article content")
           }
+          // A successful recheck may never open a dialog. Move focus before its
+          // focused access button disappears; dialog closure handles polling success.
+          if (document.activeElement === accessTrigger.current) {
+            readingHeading.current?.focus()
+          }
           setState({
             status: "content",
             article: content as ArticleContentResponse,
@@ -124,7 +129,7 @@ export function PaymentPanel({
       controller.abort()
       clearTimeout(timer)
     }
-  }, [identity, article, attempt, open])
+  }, [identity, article, attempt, open, readingHeading])
 
   const payment = state.status === "ready" ? state.payment : null
   return (
