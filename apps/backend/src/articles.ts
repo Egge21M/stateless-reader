@@ -48,9 +48,9 @@ export const articles = [
 ] as const;
 
 // Explicit projection prevents future private fields from entering the catalogue.
-export function publicCatalogue() {
+export function publicCatalogue(mintOverride?: string) {
   return articles.map(({ id, title, preview, offer }) => ({
     id, title, preview,
-    offer: { amount: offer.amount, unit: offer.unit, mint: offer.mint },
+    offer: { amount: offer.amount, unit: offer.unit, mint: mintOverride ?? offer.mint },
   }));
 }

@@ -56,7 +56,8 @@ test("an unpaid reader sees a bound QR and copyable request without transmitting
   const encoded = await request.inputValue();
   const decoded = decodePaymentRequest(encoded);
   expect(decoded.amount?.toNumber()).toBe(21);
-  expect(decoded.mints).toEqual(["https://mint.minibits.cash/Bitcoin"]);
+  expect(decoded.mints).toHaveLength(1);
+  expect(decoded.mints![0]).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
   expect(decoded.unit).toBe("sat");
   expect(decoded.transport).toHaveLength(1);
   expect(decoded.transport?.[0]?.type).toBe("post");

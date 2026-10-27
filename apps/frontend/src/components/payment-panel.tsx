@@ -3,6 +3,7 @@ import {
   signArticleRequest,
   type ReaderIdentity,
   type PaymentRequiredResponse,
+  type ArticleContentResponse,
 } from "@stateless-reader/core"
 import { QRCodeSVG } from "qrcode.react"
 import { Button } from "@/components/ui/button"
@@ -14,6 +15,7 @@ type Offer = PaymentRequiredResponse["offer"]
 type PaymentState =
   | { status: "loading" }
   | { status: "error" }
+  | { status: "content"; article: ArticleContentResponse }
   | { status: "ready"; payment: PaymentRequiredResponse }
 
 function isPayment(
@@ -46,11 +48,14 @@ export function PaymentPanel({
 }) {
   const [state, setState] = useState<PaymentState>({ status: "loading" })
   const [attempt, setAttempt] = useState(0)
+  const [open, setOpen] = useState(true)
   const [copyStatus, setCopyStatus] = useState("")
   const mounted = useRef(false)
 
   useEffect(() => {
+    if (!open) return
     mounted.current = true
+    let timer: ReturnType<typeof setTimeout> | undefined
     const controller = new AbortController()
     async function requestPayment() {
       try {
@@ -68,13 +73,25 @@ export function PaymentPanel({
           cache: "no-store",
         })
         const payment: unknown = await response.json()
+        if (controller.signal.aborted) return
+        if (response.status === 200 && payment && typeof payment === 'object') {
+          const content = payment as Partial<ArticleContentResponse>
+          if (content.articleId !== article.id || content.publicKey !== publicKey ||
+              content.protocolVersion !== 1 || typeof content.body !== 'string' || typeof content.title !== 'string') {
+            throw new Error('Invalid article content')
+          }
+          setState({ status: 'content', article: content as ArticleContentResponse })
+          return
+        }
         if (
           response.status !== 402 ||
           !isPayment(payment, article.id, publicKey, article.offer)
         ) {
           throw new Error("Invalid article response")
         }
-        if (!controller.signal.aborted) setState({ status: "ready", payment })
+        setState({ status: "ready", payment })
+        // Schedule after completion: no overlapping reads, and a fresh signature every time.
+        timer = setTimeout(() => { void requestPayment() }, 1500)
       } catch {
         if (!controller.signal.aborted) setState({ status: "error" })
       }
@@ -83,8 +100,21 @@ export function PaymentPanel({
     return () => {
       mounted.current = false
       controller.abort()
+      clearTimeout(timer)
     }
-  }, [identity, article, attempt])
+  }, [identity, article, attempt, open])
+
+  if (!open) return (
+    <div className="flex flex-col items-start gap-3">
+      <p className="text-sm text-muted-foreground">Payment panel closed. A payment already sent by your wallet can still complete.</p>
+      <Button variant="outline" onClick={() => { setState({ status: 'loading' }); setOpen(true) }}>Check article access</Button>
+    </div>
+  )
+  if (state.status === 'content') return (
+    <article aria-label={state.article.title} className="flex max-w-prose flex-col gap-5 leading-relaxed">
+      {state.article.body.split('\n\n').map((paragraph, index) => <p key={index}>{paragraph}</p>)}
+    </article>
+  )
 
   if (state.status === "loading")
     return <p role="status">Checking article access…</p>
@@ -126,9 +156,9 @@ export function PaymentPanel({
         your wallet.
       </p>
       <p className="text-sm text-muted-foreground">
-        This preview can display requests; payment processing is not available
-        yet.
+        Waiting for payment. This panel checks for access automatically.
       </p>
+      <Button variant="outline" className="self-start" onClick={() => setOpen(false)}>Close payment panel</Button>
       <QRCodeSVG
         value={state.payment.paymentRequest}
         size={280}
