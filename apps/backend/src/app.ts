@@ -1,8 +1,12 @@
 import { verifyArticleRequest, READER_PROTOCOL_VERSION } from "@stateless-reader/core";
 import { PaymentRequest, PaymentRequestTransportType } from "@cashu/cashu-ts";
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { openDatabase } from "./db";
+import { sameDatabaseFile } from "./db/paths";
 import { articles, publicCatalogue } from "./articles";
+import { accessGrants } from "./db/schema";
+import type { Settlement } from "./settlement";
+import { PaymentError, paymentHeaders, paymentToken, validPublicKey } from "./payment";
 
 export interface PublisherOptions {
   databasePath: string;
@@ -10,6 +14,9 @@ export interface PublisherOptions {
   port?: number;
   /** Trusted external HTTPS origin; defaults to the listener for loopback development. */
   publicOrigin?: string;
+  settlement?: Settlement;
+  /** Override only for isolated mint tests; operator entry point fixes Minibits. */
+  mint?: string;
 }
 
 export function startPublisher(options: PublisherOptions) {
@@ -23,7 +30,28 @@ export function startPublisher(options: PublisherOptions) {
     }
     publicOrigin = origin.origin;
   }
+  const catalogue = articles.map(article => ({ ...article, offer: {
+    ...article.offer, mint: options.mint ?? article.offer.mint,
+  } }));
+  if (options.settlement?.databasePath && sameDatabaseFile(options.databasePath, options.settlement.databasePath)) {
+    throw new Error('Application grants and Coco require separate database files');
+  }
   const database = openDatabase(options.databasePath);
+  // One process owns these grants and the check → swap → grant critical section.
+  const payments = new Map<string, Promise<unknown>>();
+  const activePayments = new Set<Promise<void>>();
+  let draining = false;
+  async function serialized<T>(pair: string, task: () => Promise<T>): Promise<T> {
+    const previous = payments.get(pair) ?? Promise.resolve();
+    const current = previous.catch(() => {}).then(task);
+    payments.set(pair, current);
+    try { return await current; }
+    finally { if (payments.get(pair) === current) payments.delete(pair); }
+  }
+  const hasGrant = (articleId: string, publicKey: string) => database.db.select().from(accessGrants).where(and(
+    eq(accessGrants.articleId, articleId), eq(accessGrants.publicKey, publicKey),
+    eq(accessGrants.protocolVersion, READER_PROTOCOL_VERSION),
+  )).get();
 
   try {
     const server = Bun.serve({
@@ -31,12 +59,12 @@ export function startPublisher(options: PublisherOptions) {
       port: options.port ?? 3000,
       routes: {
         "/articles": {
-          GET: () => Response.json({ articles: publicCatalogue() }),
+          GET: () => Response.json({ articles: publicCatalogue(options.mint) }),
         },
         "/article/:articleId": {
           GET: (request) => {
             const headers = { "Cache-Control": "no-store" };
-            const article = articles.find((article) => article.id === request.params.articleId);
+            const article = catalogue.find((article) => article.id === request.params.articleId);
             if (!article) {
               return Response.json({ error: "Not found" }, { status: 404, headers });
             }
@@ -46,6 +74,10 @@ export function startPublisher(options: PublisherOptions) {
             });
             if (!publicKey) {
               return Response.json({ error: "Article authorization required" }, { status: 401, headers });
+            }
+            if (hasGrant(article.id, publicKey)) {
+              return Response.json({ articleId: article.id, publicKey, protocolVersion: READER_PROTOCOL_VERSION,
+                title: article.title, body: article.body }, { headers });
             }
             const payment = new PaymentRequest(
               [{ type: PaymentRequestTransportType.POST,
@@ -65,12 +97,42 @@ export function startPublisher(options: PublisherOptions) {
             return Response.json({ status: "ok" });
           },
         },
+        "/payment/:articleId/:publicKey": {
+          OPTIONS: () => new Response(null, { status: 204, headers: paymentHeaders }),
+          POST: async (request) => {
+            let finished!: () => void;
+            const active = new Promise<void>(resolve => { finished = resolve; });
+            activePayments.add(active);
+            try {
+              if (draining) throw new PaymentError("Publisher shutting down", 503);
+              const { articleId, publicKey } = request.params;
+              const article = catalogue.find(a => a.id === articleId);
+              if (!article) throw new PaymentError("Not found", 404);
+              if (!validPublicKey(publicKey)) throw new PaymentError("Invalid article public key");
+              const token = await paymentToken(request, article.offer);
+              return await serialized(`${READER_PROTOCOL_VERSION}:${articleId}:${publicKey}`, async () => {
+                if (hasGrant(articleId, publicKey)) throw new PaymentError("Article access already granted", 409);
+                if (!options.settlement) throw new PaymentError("Payments unavailable", 503);
+                const result = await options.settlement.receive(token);
+                if (result.state !== "finalized") throw new PaymentError("Payment not finalized", 422);
+                // Deliberate crash gap: mint settlement and this insert are not atomic.
+                database.db.insert(accessGrants).values({ articleId, publicKey, protocolVersion: READER_PROTOCOL_VERSION }).run();
+                return Response.json({ status: "paid", articleId, publicKey, protocolVersion: READER_PROTOCOL_VERSION }, { headers: paymentHeaders });
+              });
+            } catch (error) {
+              return Response.json({ error: error instanceof PaymentError ? error.message : "Payment could not be completed" },
+                { status: error instanceof PaymentError ? error.status : 422, headers: paymentHeaders });
+            } finally {
+              finished();
+              activePayments.delete(active);
+            }
+          },
+        },
       },
       fetch() {
         return Response.json({ error: "Not found" }, { status: 404 });
       },
-      error(error) {
-        console.error(error);
+      error() {
         return Response.json({ error: "Internal server error" }, { status: 500 });
       },
     });
@@ -80,9 +142,16 @@ export function startPublisher(options: PublisherOptions) {
       url: server.url,
       stop() {
         stopping ??= (async () => {
-          // Close keep-alive connections before releasing their database.
-          await server.stop(true);
-          database.close();
+          draining = true;
+          const stopped = server.stop(false);
+          server.closeIdleConnections();
+          // A disconnected wallet must not let its still-running swap outlive SQLite.
+          await Promise.allSettled([...activePayments]);
+          await stopped;
+          // Bun can retain idle keep-alive sockets after a graceful stop.
+          server.closeIdleConnections();
+          try { await options.settlement?.close?.(); }
+          finally { database.close(); }
         })();
         return stopping;
       },

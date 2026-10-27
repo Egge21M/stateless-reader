@@ -11,7 +11,8 @@ payment requests with HTTP transport, and delegates backend Cashu operations
 to Coco. The defining demonstration is buying an article, then restoring access
 in a fresh browser using only the recovery phrase, without paying again.
 
-The repository currently contains the application scaffolding. See the
+The publisher and frontend implement the deterministic purchase and reader flow.
+The live external-wallet demonstration remains unverified. See the
 [glossary](GLOSSARY.md), [access-model decision](docs/adr/0001-accountless-article-access.md),
 and [request-authentication decision](docs/adr/0002-short-lived-signed-article-requests.md)
 for the agreed scope and privacy boundaries.
@@ -54,7 +55,8 @@ bun run start      # Run the reader once
 bun run build      # Build applications into their respective dist directories
 bun run lint       # Lint workspaces that provide a lint script
 bun run typecheck  # Check every workspace
-bun run test       # Run Bun tests (no tests are included yet)
+bun run test       # Run HTTP, crypto-vector, and real-Coco tests
+bun run test:browser # Run the real frontend/publisher purchase checks
 ```
 
 Commit `bun.lock` when dependencies change. For reproducible installs, use

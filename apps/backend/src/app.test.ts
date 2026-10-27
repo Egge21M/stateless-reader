@@ -178,7 +178,8 @@ test("publishers stop independently and release their ports for restart", async 
 test.each(["SIGINT", "SIGTERM"] as const)("CLI startup serves HTTP and shuts down on %s", async (signal) => {
   const databasePath = await temporaryDatabase();
   const child = Bun.spawn([process.execPath, new URL("./index.ts", import.meta.url).pathname], {
-    env: { ...process.env, HOST: "127.0.0.1", PORT: "0", DATABASE_PATH: databasePath },
+    env: { ...process.env, HOST: "127.0.0.1", PORT: "0", DATABASE_PATH: databasePath,
+      COCO_DATABASE_PATH: databasePath + ".coco", PUBLISHER_SEED_HEX: "2a".repeat(64) },
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -290,4 +291,31 @@ test("NUT-18 uses the configured HTTPS origin rather than caller-controlled host
   const body = await response.json() as PaymentRequiredResponse;
   expect(decodePaymentRequest(body.paymentRequest).transport?.[0]?.target)
     .toBe(`https://publisher.example/payment/the-quiet-web/${body.publicKey}`);
+});
+
+test.each(['', 'not-a-seed', 'ab'.repeat(32)])('operator startup rejects missing/malformed publisher seed without leaking it', async (secret) => {
+  const child = Bun.spawn([process.execPath, new URL('./index.ts', import.meta.url).pathname], {
+    env: { ...process.env, HOST: '127.0.0.1', PORT: '0', DATABASE_PATH: await temporaryDatabase(), PUBLISHER_SEED_HEX: secret },
+    stdout: 'pipe', stderr: 'pipe',
+  });
+  const timeout = setTimeout(() => child.kill(), 1000);
+  try {
+    expect(await child.exited).toBe(1);
+    expect(await new Response(child.stdout).text()).toBe('');
+    const error = await new Response(child.stderr).text();
+    expect(error).toContain('Publisher startup failed');
+    if (secret) expect(error).not.toContain(secret);
+  } finally { clearTimeout(timeout); }
+});
+
+test('operator startup rejects using one file for both application and Coco state', async () => {
+  const path = await temporaryDatabase();
+  const child = Bun.spawn([process.execPath, new URL('./index.ts', import.meta.url).pathname], {
+    env: { ...process.env, HOST: '127.0.0.1', PORT: '0', DATABASE_PATH: path,
+      COCO_DATABASE_PATH: path, PUBLISHER_SEED_HEX: '2a'.repeat(64) },
+    stdout: 'pipe', stderr: 'pipe',
+  });
+  expect(await child.exited).toBe(1);
+  expect(await new Response(child.stdout).text()).toBe('');
+  expect(await new Response(child.stderr).text()).toContain('Publisher startup failed');
 });
