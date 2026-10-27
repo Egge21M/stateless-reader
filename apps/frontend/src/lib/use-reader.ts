@@ -81,8 +81,9 @@ export function useReader() {
     unlock,
     lock: clear,
     dismissProfile: () => {
-      // A dismissed pending restoration must not later reveal a newly created backup.
-      if (state.pending) clear()
+      // Use the synchronous identity ref: creation and dismissal can happen before
+      // React commits the pending state. Invalidate that work even in the same turn.
+      if (!active.current) clear()
       else setState((current) => ({ ...current, backup: false, error: "" }))
     },
     toggleBackup: () =>

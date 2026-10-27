@@ -201,6 +201,11 @@ export function PaymentPanel({
                 Use a compatible external Cashu wallet with ecash from the mint
                 below.
               </p>
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Pay at least the article price. Excess payment is retained. No
+                change or refunds. Closing this dialog does not cancel a payment
+                already sent by your wallet.
+              </p>
               <QRCodeSVG
                 value={payment.paymentRequest}
                 size={280}
@@ -223,6 +228,7 @@ export function PaymentPanel({
                     readOnly
                     value={payment.paymentRequest}
                     rows={2}
+                    className="field-sizing-fixed"
                     spellCheck={false}
                   />
                 </Field>
@@ -251,11 +257,6 @@ export function PaymentPanel({
               <p role="status" className="text-sm text-muted-foreground">
                 Waiting for payment. Access checks automatically while this
                 dialog is open.
-              </p>
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                Pay at least the article price. Excess payment is retained. No
-                change or refunds. Closing this dialog does not cancel a payment
-                already sent by your wallet.
               </p>
               <Button variant="outline" onClick={() => setOpen(false)}>
                 Close payment dialog

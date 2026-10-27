@@ -1,4 +1,4 @@
-import { openProfile, closeDialog, lockReader, selectArticle } from "./reader-journey";
+import { openProfile, closeProfile, closeDialog, lockReader, selectArticle } from "./reader-journey";
 import jsQR from "jsqr";
 import { PNG } from "pngjs";
 import { expect, test } from "@playwright/test";
@@ -188,7 +188,7 @@ for (const action of ["lock", "restore", "select another", "clear selection"] as
       }
       if (action === "restore") {
         await expect(page.getByText("Reader unlocked", { exact: true })).toBeVisible();
-        await closeDialog(page);
+        await closeProfile(page);
       }
       if (action === "restore" || action === "select another") {
         await expect(payment).toBeVisible();

@@ -1,4 +1,4 @@
-import { openProfile, closeDialog, lockReader, selectArticle } from "./reader-journey";
+import { openProfile, closeProfile, closeDialog, lockReader, selectArticle } from "./reader-journey";
 import { expect, test, type Page, type APIRequestContext, type BrowserContext } from '@playwright/test';
 import { decodePaymentRequest } from '@cashu/cashu-ts';
 import { restoreReader, deriveArticleKey } from '../../packages/core/src/index';
@@ -222,7 +222,7 @@ for (const action of ['lock', 'restore', 'select another', 'close'] as const) {
         await page.getByLabel('Restore reader recovery phrase', { exact: true }).fill('abandon '.repeat(11) + 'about');
         await page.getByRole('button', { name: 'Restore reader', exact: true }).click();
         await expect(page.getByText('Reader unlocked', { exact: true })).toBeVisible();
-        await closeDialog(page);
+        await closeProfile(page);
       }
     } finally { release(); }
     await completed;

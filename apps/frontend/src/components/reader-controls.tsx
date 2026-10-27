@@ -31,9 +31,8 @@ export function ReaderControls({
       </p>
       <p className="text-sm text-muted-foreground">
         Back up your twelve words somewhere private. Losing it loses access.
-        Sharing it shares access. Only these words are needed; there is no extra
-        password or BIP39 passphrase. Reloading requires restoration. Lock
-        clears active app state; JavaScript memory erasure is not guaranteed.
+        Sharing it shares access. There is no extra password. You’ll need these
+        words again after reloading. Lock clears your active reader.
       </p>
       {reader.identity && (
         <div className="flex flex-col items-start gap-3">

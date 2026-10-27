@@ -150,3 +150,25 @@ test("locked article opens profile, returns focus, and waits for profile dismiss
     )
     .toBe(true);
 });
+
+test("dismissing profile during phrase creation cannot unlock a hidden reader", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Profile", exact: true }).click();
+  // Two real controls, before the asynchronous derivation can finish.
+  await page.getByRole("dialog").evaluate((dialog) => {
+    const buttons = [...dialog.querySelectorAll("button")];
+    buttons
+      .find((button) => button.textContent?.trim() === "Create reader phrase")!
+      .click();
+    buttons.find((button) => button.textContent?.trim() === "Close")!.click();
+  });
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.waitForTimeout(400);
+  await page.getByRole("button", { name: "Profile", exact: true }).click();
+  await expect(page.getByText("Reader locked", { exact: true })).toBeVisible();
+  await expect(
+    page.getByLabel("Your reader recovery phrase", { exact: true }),
+  ).toHaveCount(0);
+});

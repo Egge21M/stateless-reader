@@ -30,3 +30,9 @@ export async function selectArticle(page: Page, title: string) {
     .getByRole("button", { name: `Select ${title}`, exact: true })
     .click();
 }
+
+// Restoring a selected article hands off to payment as soon as Profile closes.
+export async function closeProfile(page: Page) {
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "Your reader profile" })).toHaveCount(0);
+}
